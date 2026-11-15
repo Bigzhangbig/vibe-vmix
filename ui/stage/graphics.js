@@ -99,6 +99,94 @@ function renderCaption(state) {
   }
   element.classList.toggle('visible', visible);
 }
+let concertFrame = 0;
+let concertKey = null;
+let concertRenderGeneration = 0;
+let concertStarted = 0;
+function clearConcert() {
+  concertRenderGeneration++;
+  concertKey = null;
+  cancelAnimationFrame(concertFrame);
+  const canvas = $('concertOutput');
+  canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+}
+function renderConcert(cue, motion) {
+  if (!cue) {
+    if (concertKey !== null) clearConcert();
+    return;
+  }
+  const signature = JSON.stringify([cue, motion]);
+  if (signature === concertKey) return;
+  const isNew = concertKey === null || concertStarted !== cue.at;
+  concertKey = signature;
+  concertStarted = cue.at;
+  const generation = ++concertRenderGeneration;
+  const canvas = $('concertOutput');
+  const reducedMotion = !motion || reduced || !isNew;
+  function frame() {
+    if (generation !== concertRenderGeneration) return;
+    const elapsed = !cue.at || reducedMotion ? 2.5 : Math.max(0, (Date.now() - cue.at) / 1000);
+    // Placement lives in the cue. Both centered and lower-left templates retain alpha.
+    StageGraphics.render(canvas, cue, { time: elapsed });
+    if (elapsed < 2.4) concertFrame = requestAnimationFrame(frame);
+  }
+  cancelAnimationFrame(concertFrame);
+  frame();
+  StageGraphics.ready(cue).then(() => {
+    if (generation !== concertRenderGeneration) return;
+    cancelAnimationFrame(concertFrame);
+    frame();
+  });
+}
+let bugFrame = 0;
+let bugKey = null;
+function clearConcertBug() {
+  cancelAnimationFrame(bugFrame);
+  bugFrame = 0;
+  bugKey = null;
+  const canvas = $('concertBugOutput');
+  canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+}
+function renderConcertBug(bug, motion) {
+  if (!bug) {
+    if (bugKey !== null) clearConcertBug();
+    return;
+  }
+  const signature = JSON.stringify([bug, motion]);
+  if (signature === bugKey) return;
+  cancelAnimationFrame(bugFrame);
+  bugKey = signature;
+  const canvas = $('concertBugOutput');
+  const moving = motion && !reduced;
+  const started = bug.at || Date.now() - 2500;
+  let painted = -Infinity;
+  function frame() {
+    if (bugKey !== signature) return;
+    const now = Date.now();
+    if (now - painted >= 30) {
+      StageGraphics.render(canvas, bug, {
+        time: moving ? Math.max(0, now - started) / 1000 : 2.5,
+      });
+      painted = now;
+    }
+    if (moving) bugFrame = requestAnimationFrame(frame);
+  }
+  frame();
+}
+function stageConcert(state) {
+  if (workspacePreview) {
+    const { only, hidden = [] } = previewPresentation;
+    if ((only && only !== 'concert') || hidden.includes('concert')) return null;
+  }
+  const cue = state.concertLive;
+  if (!cue) return null;
+  if (cue.type !== 'lyrics' || cue.lyrics) return cue;
+  const active = state.captionLive;
+  return {
+    ...cue,
+    lyrics: active && state.layers.caption ? StageCaptions.lines(active.caption)[active.index] : '',
+  };
+}
 function render(state) {
   latestState = state;
   if (workspacePreview) state = { ...state, style: { ...state.style, ...draftStyle } };
@@ -134,6 +222,21 @@ function render(state) {
       };
     }
   }
+  const activeConcert = stageConcert(state);
+  renderConcert(activeConcert, state.style.motion);
+  const { only, hidden = [], mode } = previewPresentation;
+  const canShowBug =
+    !workspacePreview ||
+    (mode !== 'layout' && (!only || only === 'concert') && !hidden.includes('concert'));
+  renderConcertBug(
+    canShowBug && activeConcert?.type !== 'bug' ? state.concertBug : null,
+    state.style.motion,
+  );
+  // A newer concert card replaces the generic stage lower third, but native logos can coexist.
+  if (activeConcert && !['lyrics', 'bug'].includes(activeConcert.type))
+    state = { ...state, layers: { ...state.layers, lower: false } };
+  if (activeConcert?.type === 'lyrics')
+    state = { ...state, layers: { ...state.layers, caption: false } };
   const template = templates.find((item) => item.id === state.templateId) || templates[0];
   const style = state.style,
     root = $('canvas');
@@ -167,7 +270,13 @@ function render(state) {
   setText('subtitle', [state.live?.performer, state.live?.subtitle].filter(Boolean).join(' · '));
   renderCaption(state);
   $('lower').classList.toggle('visible', Boolean(state.layers.lower && state.live));
-  if (!Object.values(state.layers).some(Boolean) && cue !== null && state.transition.cue === cue)
+  if (
+    !activeConcert &&
+    !state.concertBug &&
+    !Object.values(state.layers).some(Boolean) &&
+    cue !== null &&
+    state.transition.cue === cue
+  )
     stopTransition();
   transition(state);
   if (workspacePreview && workspaceOrigin && parent !== window) {
@@ -194,6 +303,8 @@ async function poll() {
     // A stopped module must not leave stale graphics frozen on air.
     document.querySelectorAll('.layer').forEach((element) => element.classList.remove('visible'));
     stopTransition();
+    clearConcert();
+    clearConcertBug();
     etag = '';
   }
   setTimeout(poll, preview && document.hidden ? 2000 : 300);
@@ -204,4 +315,9 @@ fetch('/api/stage/templates')
     templates = body.templates;
     poll();
   });
-window.addEventListener('pagehide', stopTransition);
+window.addEventListener('pagehide', () => {
+  stopTransition();
+  clearConcert();
+  clearConcertBug();
+  etag = '';
+});

@@ -2,6 +2,9 @@
 const { templates } = require('./templates');
 const { assertObject } = require('../../core/state-store');
 const { lines } = require('./captions');
+const {
+  concertDefaults, reduceConcert, migrateConcertDraft, savedConcert, takeConcert,
+} = require('./concert');
 const types = ['歌唱', '舞蹈', '武术', '器乐', '戏曲', '其他'];
 const layerNames = ['channel', 'event', 'sponsor', 'lower', 'caption'];
 const own = (object, key) => Object.hasOwn(object, key);
@@ -55,6 +58,21 @@ function savedCaption(value) {
     throw Error('字幕位置无效');
   return { programId, caption, index: value.index };
 }
+function cornerBug(show, title, at) {
+  return { type: 'bug', theme: 'finale50', show: show || '深秋歌会', title, full: false, at };
+}
+function savedCornerBug(value) {
+  keys(value, ['type', 'theme', 'show', 'title', 'full', 'at']);
+  if (
+    value.type !== 'bug' ||
+    value.theme !== 'finale50' ||
+    value.full !== false ||
+    !Number.isSafeInteger(value.at) ||
+    value.at < 0
+  )
+    throw Error('歌会角标数据无效');
+  return cornerBug(text(value.show, 30), text(value.title, 100), 0);
+}
 function createStageModule() {
   function defaults() {
     return {
@@ -70,6 +88,9 @@ function createStageModule() {
       programs: [],
       live: null,
       captionLive: null,
+      concert: concertDefaults(),
+      concertLive: null,
+      concertBug: null,
       layers: Object.fromEntries(layerNames.map((key) => [key, false])),
       style: {
         accent: '',
@@ -113,6 +134,7 @@ function createStageModule() {
       'transitionAsset',
       'templateId',
       'programs',
+      'concert',
       'layers',
       'style',
       'vmix',
@@ -133,6 +155,7 @@ function createStageModule() {
       if (new Set(next.programs.map((item) => item.id)).size !== next.programs.length)
         throw Error('节目编号重复');
     }
+    if (own(patch, 'concert')) next.concert = reduceConcert(current.concert, patch.concert);
     if (own(patch, 'layers')) {
       keys(patch.layers, layerNames);
       for (const value of Object.values(patch.layers))
@@ -241,8 +264,29 @@ function createStageModule() {
       keys(payload, []);
       return { ...state, layers: { ...state.layers, caption: false } };
     }),
+    command('concert.take', '歌会包装上屏', (state, payload, now) => {
+      keys(payload, []);
+      return takeConcert(state, now);
+    }),
+    command('concert.hide', '歌会包装下屏', (state, payload) => {
+      keys(payload, []);
+      return { ...state, concertLive: null };
+    }),
+    command('stage.setConcertBug', '独立控制歌会角标', (state, payload, now) => {
+      keys(payload, ['visible', 'show', 'title']);
+      if (typeof payload.visible !== 'boolean') throw Error('歌会角标开关无效');
+      if (!payload.visible) return state.concertBug ? { ...state, concertBug: null } : state;
+      const current = state.concertBug;
+      const show = own(payload, 'show') ? text(payload.show, 30) : current?.show || state.concert.show;
+      const title = own(payload, 'title') ? text(payload.title, 100) : current?.title || '';
+      const next = cornerBug(show, title, now);
+      if (current?.show === next.show && current.title === next.title) return state;
+      return { ...state, concertBug: next };
+    }),
     command('all.hide', '全部下屏', (state) => ({
       ...state,
+      concertLive: null,
+      concertBug: null,
       layers: Object.fromEntries(layerNames.map((key) => [key, false])),
     })),
     command('transition.play', '播放包装转场', (state, payload, now) => ({
@@ -265,13 +309,19 @@ function createStageModule() {
       'transition',
       'asset-library',
       'vmix-gt',
+      'concert-packaging',
+      'concert-corner-bug',
+      'main-visual',
     ],
     migrate(saved) {
       const base = defaults();
       if (Object.keys(saved).length === 0) return base;
-      const { version, live, transition, captionLive, ...editable } = saved;
+      const { version, live, transition, captionLive, concertLive, concertBug, ...editable } = saved;
+      if (own(editable, 'concert')) editable.concert = migrateConcertDraft(editable.concert);
       const state = reduce(base, editable);
       if (live != null) state.live = program(live);
+      if (concertLive != null) state.concertLive = savedConcert(concertLive);
+      if (concertBug != null) state.concertBug = savedCornerBug(concertBug);
       if (captionLive != null) state.captionLive = savedCaption(captionLive);
       else if (
         !own(saved, 'captionLive') &&
@@ -300,6 +350,8 @@ function createStageModule() {
     status: (state) => ({
       live: state.live,
       captionLive: state.captionLive,
+      concertLive: state.concertLive,
+      concertBug: state.concertBug,
       layers: state.layers,
       templateId: state.templateId,
     }),

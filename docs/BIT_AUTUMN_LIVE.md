@@ -1,0 +1,21 @@
+# 北理工深秋歌会 · Beta 2 定制版
+
+基于 [vibe-vmix 2.0.0-beta.2](https://github.com/AlanHe0728/vibe-vmix/releases/tag/v2.0.0-beta.2)，复刻第 50 届决赛的纸飞机包装。原有足球、舞台节目和 AE 直播连接保留。
+
+## 上手
+
+1. Windows 便携版完整解压后运行「转播包装工作台.exe」，勾选「舞台节目」并应用。需要系统 Edge WebView2 和 .NET Framework 4.7.2+。源码可用 Node.js 22.2+ 运行 `npm run start:workspace`。
+2. 打开「舞台节目 → 深秋歌会」，选择报幕、歌词、名次、嘉宾介绍、选手介绍、六强阵容、人气奖或右下角标。可先点「填入彩排示例」。
+3. 「居中包装」和「靠下叠画」使用同一张 1920×1080 透明画布，画布四边保留真实透明，不会画满屏底色。导入 PNG、JPG 或 WebP 主视图后，原图只在居中包装的图板内显示，可选保持完整或裁切填满该图板，不会铺满画布。歌词固定在左下，角标固定在右下。
+4. 编辑只改变预监。点击「保存并上屏」才更新舞台净输出；右下角标可独立开关。歌词可在「节目与播出」导入 LRC，再由导播逐句推进。把歌会歌词画面的自定义正文留空，即可跟随已播字幕。
+5. 在「vMix 连接」复制播出 URL，以 1920×1080 添加 Web Browser 输入。填入输入名称、编号或 GUID，再选 Overlay 1–4 进出画。角标与主包装共用同一个浏览器输入；关闭这个 Overlay 会一起撤下。
+
+用 Mac 或其他电脑预览时，可以直接打开补丁里的「模板试映.html」，不需要启动 vMix。
+
+## 导出
+
+- 歌会预监可导出 1080p 透明 PNG 序列 ZIP 或带 Alpha 的 ProRes 4444 MOV（无音轨）。MOV 需要 PATH 中的 FFmpeg，或设置 `BROADCAST_FFMPEG`。在 vMix 中使用 PNG 序列时，先解压并选择 Image Sequence 的首帧，核对帧率和 Alpha。
+- 在「素材与导入」可上传或链接 AE 的 `.aep/.aepx`。外链素材请先在 AE 重新链接，或收集完整工程。可手填合成名，也可在 AE 运行 `jsx/export-compositions.jsx` 生成合成清单。工作台调用本机 AE 渲染，不会把 AE 工程转成网页图层。
+- AE 的输出模板要预先在本机 AE 建好。透明 PNG 选 PNG Sequence、RGB + Alpha、Straight；透明 MOV 选 QuickTime / ProRes 4444、RGB + Alpha、Straight。原主视觉提取和决赛播法见「50届决赛使用指南」。
+
+本版本未完全验证，可能存在BUG，如遇BUG请与开发者联系

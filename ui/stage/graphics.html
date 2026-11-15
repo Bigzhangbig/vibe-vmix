@@ -5,10 +5,12 @@
     <title>舞台包装 · 1920×1080</title>
     <link rel="stylesheet" href="graphics.css" />
     <script defer src="/stage-module/captions.js"></script>
+    <script defer src="concert-graphics.js"></script>
     <script defer src="graphics.js"></script>
   </head>
   <body>
     <div id="canvas" data-template="gala">
+      <canvas id="concertOutput" width="1920" height="1080" aria-label="深秋歌会包装"></canvas>
       <div id="channel" class="logo layer"><img alt="" /><span></span></div>
       <div id="event" class="logo layer"><img alt="" /><span></span></div>
       <div id="sponsor" class="logo sponsor layer">
@@ -23,6 +25,7 @@
         </div>
       </section>
       <div id="caption" class="layer caption"><span id="captionText"></span></div>
+      <canvas id="concertBugOutput" width="1920" height="1080" aria-label="深秋歌会角标"></canvas>
       <div id="transition" aria-hidden="true">
         <div id="wipe"></div>
         <video id="transitionVideo" muted playsinline preload="none"></video>

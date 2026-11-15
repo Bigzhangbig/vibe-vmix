@@ -31,5 +31,14 @@ function run(args) {
   if (result.status !== 0) process.exit(result.status || 1);
 }
 
-if (!ui) run(['--test', 'tests/core.test.js', 'tests/workspace.test.js', 'tests/ae-live.test.js']);
+if (!ui) run([
+  '--test',
+  'tests/core.test.js',
+  'tests/workspace.test.js',
+  'tests/ae-live.test.js',
+  'tests/stage-concert.test.js',
+  'tests/stage-bug.test.js',
+  'tests/stage-export.test.js',
+  'tests/stage-ae.test.js',
+]);
 for (const suite of suites) run(['tests/' + suite + '.js']);

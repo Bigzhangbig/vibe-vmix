@@ -1,6 +1,6 @@
 # 转播包装工作台
 
-给 vMix 用的转播包装工具。正式版提供足球比分、计时、名单和比赛事件。Beta 版还可以加载舞台节目和 AE 直播模块。
+给 vMix 用的转播包装工具。本目录是 Beta 2 的深秋歌会定制版，保留原有模块，并新增歌会包装、主视图导入和 AE 合成选择、PNG 序列导出。见[深秋歌会使用说明](docs/BIT_AUTUMN_LIVE.md)。
 
 - 正式版 1.1.0 · [GitHub 下载](https://github.com/AlanHe0728/vibe-vmix/releases/tag/v1.1.0) · [Gitee 下载](https://gitee.com/alanhe0728/vibe-vmix/releases/tag/v1.1.0)
 - Beta 2.0.0-beta.2 · [GitHub 下载](https://github.com/AlanHe0728/vibe-vmix/releases/tag/v2.0.0-beta.2) · [Gitee 源码](https://gitee.com/alanhe0728/vibe-vmix/tree/beta)

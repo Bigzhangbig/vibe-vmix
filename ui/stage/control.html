@@ -6,6 +6,7 @@
     <title>舞台节目包装</title>
     <link rel="stylesheet" href="control.css" />
     <script defer src="/stage-module/captions.js"></script>
+    <script defer src="concert-graphics.js"></script>
     <script defer src="control.js"></script>
   </head>
   <body>
@@ -13,6 +14,7 @@
       <strong>舞台节目</strong>
       <nav aria-label="舞台工作区">
         <button data-tab="show" aria-pressed="true">节目与播出</button
+        ><button data-tab="concert" aria-pressed="false">深秋歌会</button
         ><button data-tab="design" aria-pressed="false">包装与模板</button
         ><button data-tab="library" aria-pressed="false">素材与导入</button
         ><button data-tab="connection" aria-pressed="false">vMix 连接</button>
@@ -70,8 +72,9 @@
                 ></textarea>
               </label>
               <p id="captionInputHelp" class="hint caption-input-help">
-                每行一句，最多 500 句。保存节目后可逐句播出。
+                每行一句，最多 500 句。保存节目后可逐句播出；导入 LRC 时按时间排序，现场手动推进。
               </p>
+              <label class="file-button caption-import">导入 LRC<input id="importProgramLrc" type="file" accept=".lrc,.txt,text/plain" /></label>
               <div class="actions">
                 <button type="submit" class="primary">保存节目</button
                 ><button type="button" id="moveUp">上移</button
@@ -114,6 +117,119 @@
             <button id="transition" class="wide">播放包装转场</button>
             <p class="hint">包装转场覆盖画面，不切换 vMix 摄像机。</p>
           </section>
+        </div>
+      </section>
+      <section id="concert" class="tab" hidden>
+        <div class="section-heading concert-heading">
+          <div><span class="eyebrow">北京理工大学 · STAGE GRAPHICS</span><h1>深秋歌会</h1></div>
+          <div class="actions">
+            <button type="button" id="concertOpenAE">导入 AE 工程</button>
+            <button type="button" id="concertOpenPreview">打开组合预览</button>
+          </div>
+        </div>
+        <div class="concert-grid">
+          <section class="concert-monitor" aria-labelledby="concertMonitorTitle">
+            <div class="concert-monitor-header">
+              <span id="concertMonitorTitle">PVW · 包装预监</span><span>1920 × 1080</span>
+            </div>
+            <div class="concert-canvas">
+              <canvas id="concertPreview" width="1920" height="1080" aria-label="歌会包装预监"></canvas>
+            </div>
+            <div class="concert-monitor-status">
+              <span id="concertLiveState" role="status">PGM · 尚未上屏</span>
+              <button type="button" id="concertReplay">重放入场</button>
+            </div>
+            <div class="actions concert-transport">
+              <button type="button" class="primary" id="concertTake">保存并上屏</button>
+              <button type="button" id="concertHide">歌会包装下屏</button>
+              <button type="button" id="concertSetSample">填入彩排示例</button>
+            </div>
+            <p class="hint">编辑只影响预监，必须再次上屏才更新 vMix。居中版和左下版均保留透明区域，不遮挡画面边缘。</p>
+            <div class="concert-bug-control">
+              <div>
+                <h2>独立随播角标</h2>
+                <p class="hint">采用「纸飞机」样式，可和报幕、歌词同时播出；开启时使用预监里的活动名称。</p>
+              </div>
+              <button type="button" id="concertBugToggle" aria-pressed="false" disabled>开启随播角标</button>
+            </div>
+            <section class="concert-export" aria-labelledby="concertExportTitle">
+              <h2 id="concertExportTitle">文件导出</h2>
+              <div class="concert-fields export-fields">
+                <label>格式<select id="concertFormat">
+                  <option value="png">透明 PNG 序列（ZIP）</option>
+                  <option value="mov">透明 MOV · ProRes 4444</option>
+                </select></label>
+                <label>帧率<select id="concertFps">
+                  <option>24</option><option selected>25</option><option>30</option><option>50</option><option>60</option>
+                </select></label>
+                <label>时长（秒）<input id="concertDuration" type="number" min="0.5" max="20" step="0.5" value="4" /></label>
+              </div>
+              <p class="hint">透明 Alpha 始终保留，位置与预监一致。</p>
+              <div class="actions">
+                <button type="button" id="concertExport">导出 1080p</button>
+                <button type="button" id="concertPng">保存当前 PNG</button>
+                <button type="button" id="concertExportCancel" hidden>取消</button>
+              </div>
+              <progress id="concertExportProgress" max="1" value="0" hidden aria-label="导出进度"></progress>
+              <p class="hint" id="concertExportStatus" role="status">导出当前预监画面。MOV 需要 FFmpeg。</p>
+            </section>
+          </section>
+          <form id="concertForm" class="concert-editor">
+            <h2>包装资料</h2>
+            <div class="concert-fields">
+              <label>画面类型<select id="concertType">
+                <option value="title">报幕</option>
+                <option value="lyrics">歌词</option>
+                <option value="rank">名次</option>
+                <option value="guest">嘉宾介绍</option>
+                <option value="contestant">选手介绍</option>
+                <option value="finaleCast">六强阵容</option>
+                <option value="award">人气奖</option>
+                <option value="bug">右下角标</option>
+              </select></label>
+              <p class="hint">纸飞机 · 第 50 届决赛</p>
+            </div>
+            <label>活动名称<input id="concertShow" maxlength="30" /></label>
+            <label><span id="concertTitleLabel">节目标题</span><input id="concertTitle" maxlength="100" /></label>
+            <div class="concert-fields">
+              <label data-concert-for="title guest contestant award"><span id="concertNameLabel">姓名／演唱者</span><input id="concertName" maxlength="100" /></label>
+              <label data-concert-for="contestant">选手编号<input id="concertNumber" maxlength="14" /></label>
+            </div>
+            <label data-concert-for="title rank guest contestant award finaleCast"><span id="concertSubtitleLabel">副标题</span><input id="concertSubtitle" maxlength="160" /></label>
+            <label data-concert-for="title guest contestant award">制作信息<textarea id="concertCredits" maxlength="500" rows="2"></textarea></label>
+            <label data-concert-for="rank finaleCast"><span id="concertRanksLabel">名次（每行一位，姓名与得分用「｜」分隔）</span>
+              <textarea id="concertRanks" maxlength="1000" rows="4" placeholder="林知秋｜98.6"></textarea></label>
+            <div data-concert-for="lyrics">
+              <label>当前歌词（留空时跟随逐句字幕）<input id="concertLyrics" maxlength="200" /></label>
+              <label>第二行／译文<input id="concertLyric2" maxlength="200" /></label>
+              <div class="actions">
+                <button type="button" id="concertLyricsPrevious">上一句</button>
+                <button type="button" id="concertLyricsNext">下一句</button>
+                <button type="button" id="concertGotoLyrics">编辑节目歌词</button>
+              </div>
+            </div>
+            <label class="check" data-concert-for="title rank guest contestant award finaleCast"><input id="concertFull" type="checkbox" />主体居中（不勾选则靠下）</label>
+            <label data-concert-for="title guest contestant award">人像素材<select id="concertPortraitAsset" data-assets="image"></select></label>
+            <fieldset id="concertMainSettings" class="concert-visual" data-concert-for="title rank guest contestant award finaleCast">
+              <legend>主视图 · 居中主体内</legend>
+              <div class="concert-fields">
+                <label>图片素材<select id="concertMainAsset" data-assets="image"></select></label>
+                <label>适配方式<select id="concertMainFit">
+                  <option value="cover">填满中间主体（可能裁切）</option>
+                  <option value="contain">保持完整（可能留边）</option>
+                </select></label>
+              </div>
+              <div class="actions">
+                <label class="file-button">导入主视图<input id="concertUpload" type="file" accept=".png,.jpg,.jpeg,.webp" /></label>
+                <label class="check"><input id="concertMainEnabled" type="checkbox" />显示在居中主体内</label>
+              </div>
+              <p class="hint">仅在主体居中时显示。即使导入不透明图片，也只显示在中间，外侧仍为透明。</p>
+            </fieldset>
+            <div class="actions">
+              <button type="submit">仅保存设置</button>
+              <span class="hint" id="concertDraftState" role="status"></span>
+            </div>
+          </form>
         </div>
       </section>
       <section id="design" class="tab" hidden>
@@ -200,11 +316,13 @@
         <section class="render-section">
           <h2>After Effects 离线渲染</h2>
           <p class="hint">
-            需本机安装 AE。导出 MOV 后可添加到 vMix，是否透明取决于所选 AE 输出模块。
+            先导入 AEP / AEPX，或链接原工程以保留素材路径。在已装 AE 的电脑上按合成渲染，源工程仍由 AE 编辑。
           </p>
           <form id="renderForm" class="render-form">
             <label>AE 工程<select id="renderSource"></select></label
-            ><label>合成名称<input id="composition" required maxlength="200" /></label
+            ><label>合成名称<input id="composition" list="aeCompositions" required maxlength="200" />
+              <datalist id="aeCompositions"></datalist></label
+            ><label>输出格式<select id="aeRenderFormat"><option value="mov">MOV → vMix</option><option value="png-sequence">透明 PNG 序列（ZIP）</option></select></label
             ><label
               >AE 输出模块模板<input
                 id="outputModule"
@@ -213,6 +331,17 @@
                 maxlength="200" /></label
             ><button type="submit">开始渲染</button>
           </form>
+          <div class="actions ae-manifest-actions">
+            <label class="file-button">
+              导入 AE 合成清单<input id="aeManifestUpload" type="file" accept=".json,application/json" />
+            </label>
+            <small id="aeManifestSummary" class="hint" role="status"></small>
+          </div>
+          <p class="hint">
+            在 AE 中打开同一工程，经「文件 → 脚本 → 运行脚本文件」运行附带的
+            <code>ae-plugin/jsx/export-compositions.jsx</code> 导出合成清单。导入清单后可从建议列表选合成，也可直接输入名称。
+            输出模块需在 AE 中事先配置：透明 MOV 用 QuickTime / ProRes 4444，PNG 序列用 PNG；通道选「RGB + Alpha」，颜色选「直接（无蒙版）」。需要在 AE 里实时改字时，使用工作台原有的「AE 直播连接」模块。
+          </p>
           <pre id="renderLog" aria-live="polite"></pre>
         </section>
       </section>
@@ -228,7 +357,7 @@
             <p class="hint">在本机 vMix 中添加网页浏览器输入，分辨率设为 1920 × 1080。</p>
           </section>
           <section>
-            <h2>GT 标题控制</h2>
+            <h2>vMix 叠画与 GT 标题</h2>
             <form id="vmixForm">
               <label
                 >本机 Web API 端口<input
@@ -252,10 +381,10 @@
             <div class="actions vmix-actions">
               <button data-vmix="connect">测试连接</button
               ><button data-vmix="text">同步当前节目到 GT</button
-              ><button data-vmix="show">GT 上屏</button><button data-vmix="hide">GT 下屏</button>
+              ><button data-vmix="show">叠画上屏</button><button data-vmix="hide">叠画下屏</button>
             </div>
             <p class="hint">
-              先在素材库添加 GT 到 vMix。字段名须与 GT 标题编辑器一致，文字字段以 .Text 结尾。
+              填写 vMix 中的网页浏览器或 GT 输入名称、编号或 GUID。叠画进出适用于两者；同步文字仅用于 GT，字段名以 .Text 结尾。
             </p>
           </section>
         </div>

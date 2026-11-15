@@ -4,6 +4,7 @@ const { createServer } = require('./create-server');
 const { createStageModule } = require('../modules/stage');
 const { templates } = require('../modules/stage/templates');
 const { createAssetLibrary } = require('./stage-assets');
+const { makeStageExport } = require('./stage-export');
 const { json, readObject, method } = require('./http-utils');
 const { AppError } = require('../core/errors');
 
@@ -13,6 +14,7 @@ function createStageServer({
   vmixFetch = fetch,
 }) {
   const library = createAssetLibrary(path.join(dataDirectory, 'assets'));
+  const concertExport = makeStageExport();
   async function vmix(state, params) {
     const url = new URL('http://127.0.0.1:' + state.vmix.port + '/api/');
     url.search = new URLSearchParams(params).toString();
@@ -50,6 +52,7 @@ function createStageServer({
       }
       if (!pathname.startsWith('/api/stage/')) return false;
       res.setHeader('Cache-Control', 'no-store');
+      if (await concertExport.route(req, res, pathname)) return true;
       if (pathname === '/api/stage/templates') {
         method(req, 'GET');
         json(res, { ok: true, templates });
@@ -63,6 +66,9 @@ function createStageServer({
       } else if (pathname === '/api/stage/register') {
         method(req, 'POST');
         json(res, { ok: true, asset: library.register((await readObject(req, 8192)).path) });
+      } else if (pathname === '/api/stage/ae-manifest') {
+        method(req, 'POST');
+        json(res, { ok: true, asset: library.attachAEManifest(await readObject(req, 262144)) });
       } else if (pathname === '/api/stage/render') {
         if (req.method === 'GET') json(res, { ok: true, jobs: library.jobs() });
         else {
@@ -100,11 +106,12 @@ function createStageServer({
             throw new AppError('主标题已同步，副标题同步失败：' + error.message, 502);
           }
         } else if (['show', 'hide'].includes(payload.action)) {
-          if (!state.vmix.input) throw new AppError('请填写 GT 输入名或编号');
+          if (payload.action === 'show' && !state.vmix.input)
+            throw new AppError('请填写 vMix 输入名称、编号或 GUID');
           await vmix(state, {
             Function:
               'OverlayInput' + state.vmix.overlay + (payload.action === 'show' ? 'In' : 'Out'),
-            Input: state.vmix.input,
+            ...(payload.action === 'show' ? { Input: state.vmix.input } : {}),
           });
         } else throw new AppError('未知的 vMix 操作');
         json(res, { ok: true });
@@ -112,7 +119,7 @@ function createStageServer({
       return true;
     },
   });
-  server.on('close', () => library.close());
+  server.on('close', () => { library.close(); concertExport.close(); });
   return server;
 }
 module.exports = { createStageServer };
