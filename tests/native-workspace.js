@@ -155,26 +155,38 @@ async function main() {
       { frameId: footballFrame.id, worldName: 'native-preview-test' },
       sessionId,
     );
+    let editorReady = false;
     for (let i = 0; i < 60; i++) {
       const probe = await cdp.send(
         'Runtime.evaluate',
         {
           contextId: world.executionContextId,
-          expression: '!!document.querySelector(\'[onclick=\\"editorOpen()\\"]\')',
+          expression:
+            'document.readyState === "complete" && document.getElementById("connDot")?.classList.contains("ok") && !!document.querySelector(\'[onclick=\\"editorOpen()\\"]\')',
           returnByValue: true,
         },
         sessionId,
       );
-      if (probe.result.value) break;
+      assert.equal(probe.exceptionDetails, undefined, 'football editor readiness probe succeeds');
+      if (probe.result.value) {
+        editorReady = true;
+        break;
+      }
       await delay(100);
     }
-    await cdp.send(
+    assert(editorReady, 'football control scripts and initial service connection are ready');
+    const clicked = await cdp.send(
       'Runtime.evaluate',
       {
         contextId: world.executionContextId,
         expression: 'document.querySelector(\'[onclick=\\"editorOpen()\\"]\').click()',
       },
       sessionId,
+    );
+    assert.equal(
+      clicked.exceptionDetails,
+      undefined,
+      'football editor click evaluates successfully',
     );
     let previewTarget;
     for (let i = 0; i < 100; i++) {
@@ -194,7 +206,7 @@ async function main() {
     await cdp.send('Runtime.enable', {}, attached.sessionId);
     await cdp.until(
       attached.sessionId,
-      "document.querySelector('[data-tab=football]')?.getAttribute('aria-pressed')==='true' && document.querySelectorAll('.canvas iframe').length===2",
+      "document.querySelector('[data-tab=football]')?.getAttribute('aria-pressed')==='true' && document.querySelectorAll('.canvas iframe').length===1",
     );
     await measure('三个模块启用，停留模块管理页');
     await fetch(football + '/api/v1/state', {
