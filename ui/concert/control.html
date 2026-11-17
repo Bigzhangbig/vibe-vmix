@@ -18,12 +18,21 @@
     <a href="config.html">配置</a>
   </nav>
   <div class="topbar-mid"></div>
-  <button class="mini ghost" data-open-graphics>显示上屏</button>
+  <button class="mini ghost" data-open-graphics>打开透明输出</button>
+  <button id="btn-clear" class="danger" data-command disabled>撤下全部包装</button>
   <span id="conn" class="pill">连接中…</span>
 </header>
 
 <main class="page live-wrap">
   <section class="live-main">
+
+    <article class="card production-status">
+      <div class="card-head"><h2>播出状态</h2><span id="outputSummary" class="pill" role="status">正在检查输出…</span></div>
+      <p id="onAirSong" class="on-air-song">当前节目尚未读取</p>
+      <p id="storageWarning" class="storage-warning" role="alert" hidden></p>
+      <ul id="outputDetails" class="output-details"></ul>
+      <p class="hint">上屏页面每 5 秒回报播放器状态，15 秒无回报后失效。最终画面在 vMix 监看。</p>
+    </article>
 
     <!-- 节目：报幕 + 歌词 -->
     <article class="card chan" id="card-program">
@@ -46,18 +55,20 @@
       </div>
 
       <div class="field">
-        <span>当前节目</span>
+        <span>待播节目</span>
         <select id="songSelect"></select>
         <div class="hint" id="songMeta">—</div>
       </div>
 
       <div class="field">
         <span>报幕文本 <button id="btnFillAnnounce" class="mini ghost">填入默认</button></span>
-        <textarea id="announceText" rows="3" placeholder="手动填写，或点「填入默认」按当前节目生成"></textarea>
+        <textarea id="announceText" rows="3" maxlength="2000" placeholder="填写待播报幕，点击上屏后播出"></textarea>
+        <div class="hint">选择节目和修改文字先存为本页草稿，点击「报幕上屏」或「歌词上屏」才切换节目。</div>
       </div>
 
       <div class="row3">
-        <button id="btn-announce" class="chan-toggle big">报幕上屏</button>
+        <button id="btn-announce" class="chan-toggle big" data-command disabled>报幕上屏</button>
+        <button id="btn-announce-off" class="mini ghost" data-command hidden>撤下报幕</button>
       </div>
 
       <hr class="split">
@@ -69,9 +80,10 @@
       <div class="lyric-line" id="lyricLine">—</div>
 
       <div class="lyric-acts">
-        <button id="btn-next" class="chan-toggle big">下一句</button>
-        <button id="btn-lyric" class="chan-toggle big">歌词上屏</button>
-        <button id="btn-prev" class="mini ghost">上一句</button>
+        <button id="btn-next" class="chan-toggle big" data-command disabled>下一句</button>
+        <button id="btn-lyric" class="chan-toggle big" data-command disabled>歌词上屏</button>
+        <button id="btn-prev" class="mini ghost" data-command disabled>上一句</button>
+        <button id="btn-lyric-off" class="mini ghost" data-command hidden>撤下歌词</button>
       </div>
     </article>
 
@@ -82,7 +94,7 @@
           <div class="chan-title"><b>晋级</b><span>文本框</span></div>
           <div class="chan-side">
             <span class="lamp" id="lamp-qualify"><i></i>On Air</span>
-            <button id="btn-qualify" class="chan-toggle big">上屏</button>
+            <button id="btn-qualify" class="chan-toggle big" data-command disabled>上屏</button>
           </div>
         </header>
         <div class="field"><span>标题</span><input id="qualifyTitle" type="text" value="晋级" maxlength="24"></div>
@@ -95,8 +107,8 @@
           <div class="chan-title"><b>结尾名单</b><span>滚动字幕</span></div>
           <div class="chan-side">
             <span class="lamp" id="lamp-credits"><i></i>On Air</span>
-            <button id="btn-credits-pause" class="mini" hidden>暂停滚动</button>
-            <button id="btn-credits" class="chan-toggle big">上屏</button>
+            <button id="btn-credits-pause" class="mini" data-command hidden>暂停滚动</button>
+            <button id="btn-credits" class="chan-toggle big" data-command disabled>上屏</button>
           </div>
         </header>
         <div class="field"><span>滚动速度（像素/秒）</span><input id="creditsSpeed" type="number" min="10" max="200" step="5" value="40"></div>
@@ -108,7 +120,7 @@
           <div class="chan-title"><b>角标</b><span>纸飞机动画</span></div>
           <div class="chan-side">
             <span class="lamp" id="lamp-badge"><i></i>On Air</span>
-            <button id="btn-badge" class="chan-toggle big">上屏</button>
+            <button id="btn-badge" class="chan-toggle big" data-command disabled>上屏</button>
           </div>
         </header>
         <p class="hint">素材与位置在素材页调整。</p>
@@ -120,7 +132,7 @@
           <div class="chan-title"><b>主视觉</b><span>vMix 视频输入</span></div>
           <div class="chan-side">
             <span class="lamp" id="lamp-visual"><i></i>On Air</span>
-            <button id="btn-visual" class="chan-toggle big">上屏</button>
+            <button id="btn-visual" class="chan-toggle big" data-command disabled>上屏</button>
           </div>
         </header>
         <p class="hint">通过 vMix HTTP API 控制 overlay，需要在配置页启用并填好输入名。</p>

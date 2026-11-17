@@ -3,31 +3,10 @@ html.layout-editor {
   background: repeating-conic-gradient(#2a323d 0 25%, #1b2029 0 50%) 0 0 / 24px 24px !important;
 }
 
-/* 工作区自带的尚古黑体（2026深秋包装\尚古黑体） */
-@font-face {
-  font-family: "Shanggu Sans SC";
-  src: url("/fonts/ShangguSansSC-Regular.ttf") format("truetype");
-  font-weight: 400;
-  font-display: swap;
-}@font-face {
-  font-family: "Shanggu Sans SC";
-  src: url("/fonts/ShangguSansSC-Medium.ttf") format("truetype");
-  font-weight: 500;
-  font-display: swap;
-}@font-face {
-  font-family: "Shanggu Sans SC";
-  src: url("/fonts/ShangguSansSC-Bold.ttf") format("truetype");
-  font-weight: 700;
-  font-display: swap;
-}@font-face {
-  font-family: "Shanggu Sans SC";
-  src: url("/fonts/ShangguSansSC-Heavy.ttf") format("truetype");
-  font-weight: 900;
-  font-display: swap;
-}:root {
+:root {
   --in-ms: 320ms;
   --out-ms: 240ms;
-  --stage-font: "Shanggu Sans SC", "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif;
+  --stage-font: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif;
 }html, body {
   margin: 0;
   padding: 0;
@@ -73,10 +52,10 @@ html.layout-editor {
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow: visible;
+  overflow: hidden;
 }.text-inner {
   width: auto;
-  max-width: 100%;
+  max-width: calc(100% - 8px);
   font-family: var(--stage-font);
   line-height: 1.2;
   text-align: center;
@@ -233,3 +212,15 @@ body.edit-mode .el.solo {
   outline: 2px dashed rgba(76, 141, 255, .9);
   outline-offset: 2px;
 }
+
+/* 可编辑品牌字标复用原角标容器和几何。 */
+.badge-box video { width: 100%; height: 100%; object-fit: fill; pointer-events: none; }
+.brand-badge { display: none; position: absolute; left: 23.4375%; top: 41.666667%; width: 40.3125%; height: 31.111111%; box-sizing: border-box; overflow: hidden; flex-direction: column; justify-content: center; align-items: flex-start; border-left: 4px solid var(--brand-accent, #9fdaed); padding: 8px 14px; color: white; text-shadow: 0 2px 8px #000b; pointer-events: none; }
+.brand-badge strong, .brand-badge span { display: block; max-width: 100%; overflow-wrap: anywhere; line-height: 1.2; }
+.brand-badge strong { font-weight: 700; }
+.brand-badge span { color: var(--brand-accent, #9fdaed); margin-top: 5px; }
+.brand-badge span:empty { display: none; }
+.text-badge video { display: none; }
+.text-badge .brand-badge { display: flex; }
+.branded-package .qualify-title-box .text-inner, .branded-package .credits-scroll .role { color: var(--brand-accent, #9fdaed) !important; }
+body.edit-mode .text-box[data-overflow="true"] { outline-color: #ff765e; }

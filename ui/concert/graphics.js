@@ -39,8 +39,16 @@
   let manifest = { assets: {}, channels: {} };
   let channels = {};
   let announcePlaybackId = '';
-  let config = { fadeIn: 320, fadeOut: 240, font: { family: 'Shanggu Sans SC', weight: 700, shadow: true } };
+  let config = { fadeIn: 320, fadeOut: 240, font: { family: 'Microsoft YaHei', weight: 700, shadow: true } };
   let editSelected = null;
+
+  function mediaOf(el) {
+    return el && (el.tagName === 'VIDEO' ? el : el.querySelector('video'));
+  }
+
+  function textBadgeEnabled() {
+    return config.branding?.badgeMode === 'text';
+  }
 
   // ---------- 画布适配 ----------
 
@@ -66,6 +74,7 @@
       const box = els[id];
       if (box && box.classList.contains('text-box')) fitText(box, box.querySelector('.text-inner'));
     }
+    fitBrandBadge();
   }
 
   // ---------- 配置与布局 ----------
@@ -77,7 +86,35 @@
     root.style.setProperty('--in-ms', (Number(config.fadeIn) || 0) + 'ms');
     root.style.setProperty('--out-ms', (Number(config.fadeOut) || 0) + 'ms');
     if (config.font && config.font.family) {
-      root.style.setProperty('--stage-font', '"' + config.font.family + '", "Shanggu Sans SC", "Microsoft YaHei", sans-serif');
+      root.style.setProperty('--stage-font', '"' + config.font.family + '", "Microsoft YaHei", "PingFang SC", sans-serif');
+    }
+    const branding = config.branding || {};
+    const accent = /^#[0-9a-f]{6}$/i.test(branding.accent || '') ? branding.accent : '#9fdaed';
+    root.style.setProperty('--brand-accent', accent);
+    document.body.classList.toggle('branded-package', textBadgeEnabled());
+    els.badge.classList.toggle('text-badge', textBadgeEnabled());
+    document.getElementById('brandEventTitle').textContent = branding.eventTitle || '深秋歌会';
+    document.getElementById('brandSubtitle').textContent = branding.subtitle || '';
+    if (textBadgeEnabled()) {
+      invalidateMediaRequest(mediaOf(els.badge));
+      mediaOf(els.badge).pause();
+    }
+    else if (channels.badge?.on || els.badge.classList.contains('preview-on')) showVideo('badge');
+    document.fonts.ready.then(refitAll);
+    refitAll();
+  }
+
+  function fitBrandBadge() {
+    const box = document.getElementById('brandBadge');
+    if (!box || !textBadgeEnabled()) return;
+    const title = document.getElementById('brandEventTitle');
+    const subtitle = document.getElementById('brandSubtitle');
+    const maxSize = Math.max(12, Math.round((els.badge.clientWidth || 1920) * 92 / 1920));
+    title.style.fontSize = maxSize + 'px';
+    subtitle.style.fontSize = Math.max(12, Math.round(maxSize * 42 / 92)) + 'px';
+    for (let size = maxSize; size > 12 && (box.scrollHeight > box.clientHeight || box.scrollWidth > box.clientWidth); size -= 2) {
+      title.style.fontSize = (size - 2) + 'px';
+      subtitle.style.fontSize = Math.max(12, Math.round((size - 2) * 42 / 92)) + 'px';
     }
   }
 
@@ -114,10 +151,14 @@
   }
 
   function playBg(el, channel) {
+    if (channel === 'badge' && textBadgeEnabled()) return;
+    el = mediaOf(el);
+    if (!el) return;
     const key = bgFile(channel);
     const asset = key ? assetOf(key) : {};
     const file = asset.file || key;
     if (!file) return;
+    const request = invalidateMediaRequest(el);
     const src = '/assets/' + encodeURIComponent(file);
     if (el.dataset.src !== src) {
       el.dataset.src = src;
@@ -125,8 +166,7 @@
       el.load();
     }
     el.loop = true;
-    const p = el.play();
-    if (p && p.catch) p.catch(() => { /* 自动播放被拦，忽略 */ });
+    playMedia(el, () => el._playRequest === request && el.dataset.src === src);
   }
 
   function setPreview(input, on, target) {
@@ -174,7 +214,7 @@
         const ch = channels[channel];
         if (!(ch && ch.on)) {
           try {
-            el.pause();
+            mediaOf(el)?.pause();
           } catch {
             /* 忽略 */
           }
@@ -187,7 +227,7 @@
       for (const id of Object.keys(els)) {
         if (!BG_ID_TO_CHANNEL[id] || soloIds.has(id)) continue;
         try {
-          els[id].pause();
+          mediaOf(els[id])?.pause();
         } catch {
           /* 忽略 */
         }
@@ -221,8 +261,8 @@
     if (rect.size == null) return;
     const inner = box.querySelector('.text-inner');
     if (!inner) return;
-    const family = rect.font || (config.font && config.font.family) || 'Shanggu Sans SC';
-    inner.style.fontFamily = '"' + family + '", "Shanggu Sans SC", "Microsoft YaHei", sans-serif';
+    const family = rect.font || (config.font && config.font.family) || 'Microsoft YaHei';
+    inner.style.fontFamily = '"' + family + '", "Microsoft YaHei", "PingFang SC", sans-serif';
     inner.style.fontWeight = String(rect.weight || 700);
     inner.style.lineHeight = String(rect.lh || 1.2);
     inner.style.color = rect.color || '#ffffff';
@@ -283,33 +323,36 @@
     const rect = layout[id] || {};
     hud.textContent = id + '  x=' + Math.round(rect.x || 0) + '  y=' + Math.round(rect.y || 0) +
       '  w=' + Math.round(rect.w || 0) + '  h=' + Math.round(rect.h || 0);
+    if (els[id]?.dataset.overflow === 'true') hud.textContent += '　文字超出框，请增大文字框或拆行';
   }
 
   // ---------- 文字排版（P8） ----------
 
-  /**
-   * 字号就是“设多大就多大”：先按设定值铺满，只有在横向放不下时才按宽度收缩。
-   * 纵向不再压缩，所以调大字号能立刻看见变化（容器只当定位框用）。
-   */
+  // 同时测量宽高，保留设置字号作为上限，极长文字在最小字号下裁切。
   function fitText(box, inner) {
     if (!box || !inner) return;
     const maxSize = Number(inner.dataset.maxSize) || 64;
     const text = (inner.textContent || '').trim();
     inner.style.fontSize = maxSize + 'px';
+    box.dataset.overflow = 'false';
     if (!text) return;
     const limitW = box.clientWidth - 8;
-    if (limitW <= 0) return;
-    if (inner.scrollWidth <= limitW) return;
+    const limitH = box.clientHeight;
+    if (limitW <= 0 || limitH <= 0) return;
+    const fits = () => inner.scrollWidth <= limitW && inner.scrollHeight <= limitH;
+    if (fits()) return;
 
-    let lo = 12;
+    let lo = Math.min(12, maxSize);
     let hi = maxSize;
     for (let i = 0; i < 12; i++) {
       const mid = (lo + hi) / 2;
       inner.style.fontSize = mid + 'px';
-      if (inner.scrollWidth <= limitW) lo = mid;
+      if (fits()) lo = mid;
       else hi = mid;
     }
     inner.style.fontSize = Math.floor(lo) + 'px';
+    box.dataset.overflow = String(!fits());
+    if (editSelected === box.dataset.el) updateHud(editSelected);
   }
 
   // ---------- 视频背景（P7） ----------
@@ -336,9 +379,50 @@
    * 上背景：先确保 src 已就绪，再淡入。
    * 关键点是不要在视频还没出帧时就开始过渡，否则观感就是硬切。
    */
+  function invalidateMediaRequest(el) {
+    el._playRequest = (el._playRequest || 0) + 1;
+    if (el._pendingCanplay) {
+      el.removeEventListener('canplay', el._pendingCanplay);
+      el._pendingCanplay = null;
+    }
+    el._playError = '';
+    return el._playRequest;
+  }
+
+  function playMedia(el, isCurrent) {
+    if (!el._tracksPlayError) {
+      el._tracksPlayError = true;
+      el.addEventListener('playing', () => {
+        el._playError = '';
+        el.dispatchEvent(new Event('playbackstatus'));
+      });
+    }
+    const failed = (error) => {
+      // 主动下屏、换源或重播已更换请求代次，其迟到的拒绝无效。
+      if (!isCurrent()) return;
+      el._playError = error?.message || error?.name || '播放器未能开始播放';
+      el.dispatchEvent(new Event('playbackstatus'));
+    };
+    try {
+      const pending = el.play();
+      if (pending && pending.catch) pending.catch(failed);
+    } catch (error) {
+      failed(error);
+    }
+  }
+
   function showVideo(channel, overrideFile) {
-    const el = els[BG_OF[channel]];
+    const box = els[BG_OF[channel]];
+    const el = mediaOf(box);
     if (!el) return;
+    const request = invalidateMediaRequest(el);
+    if (channel === 'badge' && textBadgeEnabled()) {
+      clearTimeout(el._offTimer);
+      el.pause();
+      box.classList.add('on');
+      fitBrandBadge();
+      return;
+    }
     const key = overrideFile || bgFile(channel);
     if (!key) {
       hideVideo(channel);
@@ -358,8 +442,13 @@
     el.loop = asset.mode !== 'once';
     clearTimeout(el._offTimer);
 
+    const isCurrent = () =>
+      el._playRequest === request && el.dataset.src === src && !!channels[channel]?.on;
+
     const start = () => {
-      if (!el.dataset.src) return;
+      if (!isCurrent()) return;
+      el._pendingCanplay = null;
+      if (channel === 'badge' && textBadgeEnabled()) return;
       // 只有重新上屏（当前是暂停状态）才回到开头；
       // 歌词连续下一句时视频仍在播，不要重置时间，否则背景每次都从头放。
       if (el.paused || restart) {
@@ -369,13 +458,15 @@
           /* 元数据还没到时忽略 */
         }
       }
-      el.classList.add('on');
-      const p = el.play();
-      if (p && p.catch) p.catch(() => { /* 自动播放被拦，等下一次操作 */ });
+      box.classList.add('on');
+      playMedia(el, isCurrent);
     };
 
-    if (!changed || el.readyState >= 2) start();
-    else el.addEventListener('canplay', start, { once: true });
+    if (el.readyState >= 2) start();
+    else {
+      el._pendingCanplay = start;
+      el.addEventListener('canplay', start, { once: true });
+    }
   }
 
   /**
@@ -383,9 +474,11 @@
    * 之前直接 pause() 会让画面停在最后一帧，看起来像瞬间消失。
    */
   function hideVideo(channel) {
-    const el = els[BG_OF[channel]];
+    const box = els[BG_OF[channel]];
+    const el = mediaOf(box);
     if (!el) return;
-    el.classList.remove('on');
+    invalidateMediaRequest(el);
+    box.classList.remove('on');
     const ms = Math.max(0, Number(config.fadeOut) || 0);
     clearTimeout(el._offTimer);
     el._offTimer = setTimeout(() => {
@@ -400,12 +493,13 @@
   // 预加载所有已绑定的背景，切换时能立刻出帧
   function preloadBackgrounds() {
     for (const ch of Object.keys(BG_OF)) {
-      const el = els[BG_OF[ch]];
+      const el = mediaOf(els[BG_OF[ch]]);
       const key = bgFile(ch);
       if (!el || !key) continue;
       const asset = assetOf(key);
       const src = '/assets/' + encodeURIComponent(asset.file || key);
       if (el.dataset.src === src) continue;
+      invalidateMediaRequest(el);
       el.dataset.src = src;
       el.src = src;
       el.preload = 'auto';
@@ -938,6 +1032,60 @@
   }
 
   // ---------- 启动 ----------
+
+  // 正式输出页面上报自身播放器状态，预览与编辑实例不参与。
+  if (!PREVIEW && !OBSERVER && !EDIT) {
+    const rendererId = crypto.randomUUID();
+    let reportTimer = null;
+    let inFlight = false;
+    let disposed = false;
+    async function reportRenderer() {
+      reportTimer = null;
+      if (inFlight || disposed) return;
+      inFlight = true;
+      try {
+        await fetch('/api/renderer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: AbortSignal.timeout(4000),
+          body: JSON.stringify({
+            id: rendererId,
+            width: innerWidth,
+            height: innerHeight,
+            media: Object.entries(BG_OF).map(([channel, id]) => {
+              const video = mediaOf(els[id]);
+              return {
+                channel,
+                file: channel === 'badge' && textBadgeEnabled() ? '' : bgFile(channel),
+                readyState: video.readyState,
+                paused: video.paused,
+                ended: video.ended,
+                error: channel === 'badge' && textBadgeEnabled() ? '' : (video.error?.message || video._playError || ''),
+                on: !!channels[channel]?.on,
+              };
+            }),
+          }),
+        });
+      } catch { /* 状态超时由控制页显示，输出继续。 */ }
+      finally { inFlight = false; }
+    }
+    function scheduleReport() {
+      if (!disposed && reportTimer === null) reportTimer = setTimeout(reportRenderer, 500);
+    }
+    for (const id of Object.values(BG_OF)) {
+      const video = mediaOf(els[id]);
+      for (const event of ['error', 'loadeddata', 'playing', 'playbackstatus']) video.addEventListener(event, scheduleReport);
+    }
+    const heartbeat = setInterval(scheduleReport, 5000);
+    scheduleReport();
+    window.addEventListener('beforeunload', () => {
+      disposed = true;
+      clearInterval(heartbeat);
+      clearTimeout(reportTimer);
+    }, { once: true });
+  }
+
+  document.fonts.addEventListener('loadingdone', refitAll);
 
   if (CLEAN) document.body.classList.add('clean');
   fitStage();

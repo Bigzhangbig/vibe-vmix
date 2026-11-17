@@ -2,13 +2,15 @@
 
 给 vMix 用的转播包装工具。深秋歌会合并版内置原版 WebM 包装素材、歌曲、逐句歌词和版式编辑，统一在工作台中启停，保留舞台、足球和 AE 模块。见[深秋歌会使用说明](docs/BIT_AUTUMN_LIVE.md)。
 
-下载本仓库的 [Windows 歌会合并版](https://github.com/Bigzhangbig/vibe-vmix/releases/tag/v2.0.0-beta.2-bit-autumn.2)，完整解压后运行「转播包装工作台.exe」，点击左侧「深秋歌会」。
+下载本仓库的 [Windows 歌会合并版](https://github.com/Bigzhangbig/vibe-vmix/releases/tag/v2.0.0-beta.2-bit-autumn.3)，完整解压后运行「转播包装工作台.exe」，点击左侧「深秋歌会」。
 
 - 正式版 1.1.0 · [GitHub 下载](https://github.com/AlanHe0728/vibe-vmix/releases/tag/v1.1.0) · [Gitee 下载](https://gitee.com/alanhe0728/vibe-vmix/releases/tag/v1.1.0)
 - Beta 2.0.0-beta.2 · [GitHub 下载](https://github.com/AlanHe0728/vibe-vmix/releases/tag/v2.0.0-beta.2) · [Gitee 源码](https://gitee.com/alanhe0728/vibe-vmix/tree/beta)
 - [历史版本和浏览器源码](https://github.com/AlanHe0728/vibe-vmix/releases)
 
-解压便携包后运行 EXE。打开控制台，复制上屏地址到 vMix 网页输入，画布设为 1920 × 1080。Beta 可先在 PVW 调整布局，再应用到播出。
+解压便携包后运行 EXE。打开控制台，复制上屏地址到 vMix 网页输入，画布设为 1920 × 1080。在单画布编辑页调整布局，vMix 负责监看和合成。
+
+歌会支持可修改的活动名称、主题和文字角标。先准备下一首，再明确上屏，控制台提供全部撤下与播放器状态提示。见[本届包装方案](docs/AUTUMN_DESIGN_2026.md)。
 
 [足球使用说明](docs/USAGE.md) · [Beta 使用说明](https://github.com/AlanHe0728/vibe-vmix/blob/beta/docs/WORKSPACE_2.md) · [AE 插件](https://github.com/AlanHe0728/vibe-vmix/blob/beta/ae-plugin/README.md) · [反馈问题](https://github.com/AlanHe0728/vibe-vmix/issues)
 

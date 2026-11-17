@@ -48,9 +48,15 @@
     syncFadeLabels();
 
     const font = cfg.font || {};
-    $('#fontFamily').value = font.family || 'Shanggu Sans SC';
+    $('#fontFamily').value = font.family || 'Microsoft YaHei';
     $('#fontWeight').value = String(font.weight || 700);
     $('#fontShadow').checked = font.shadow !== false;
+
+    const branding = cfg.branding || {};
+    $('#brandEventTitle').value = branding.eventTitle || '深秋歌会';
+    $('#brandSubtitle').value = branding.subtitle || '';
+    $('#brandAccent').value = branding.accent || '#9fdaed';
+    $('#brandBadgeMode').value = branding.badgeMode || 'original';
 
 
     const vmix = cfg.vmix || {};
@@ -63,6 +69,7 @@
 
   function payload() {
     return {
+      branding: brandingPayload(),
       fadeIn: Number($('#fadeIn').value),
       fadeOut: Number($('#fadeOut').value),
       font: {
@@ -77,6 +84,15 @@
         input: $('#vmixInput').value.trim(),
         overlay: Number($('#vmixOverlay').value),
       },
+    };
+  }
+
+  function brandingPayload() {
+    return {
+      eventTitle: $('#brandEventTitle').value.trim() || '深秋歌会',
+      subtitle: $('#brandSubtitle').value.trim(),
+      accent: $('#brandAccent').value,
+      badgeMode: $('#brandBadgeMode').value,
     };
   }
 
@@ -221,6 +237,19 @@
         toast('保存失败：' + err.message, true);
       }
     });
+
+    async function saveBranding(mode) {
+      const branding = { ...brandingPayload(), badgeMode: mode };
+      try {
+        await api('/api/config', { branding });
+        $('#brandBadgeMode').value = mode;
+        toast(mode === 'text' ? '本届包装已应用' : '已恢复原素材角标');
+      } catch (err) {
+        toast('保存失败：' + err.message, true);
+      }
+    }
+    $('#btnApplyBranding').addEventListener('click', () => saveBranding('text'));
+    $('#btnOriginalBadge').addEventListener('click', () => saveBranding('original'));
 
     $('#btnSaveCredits').addEventListener('click', async () => {
       try {

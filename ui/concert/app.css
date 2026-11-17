@@ -607,3 +607,11 @@ button {
   font-size: 12px;
   color: var(--ink-3);
 }
+
+.production-status .card-head { justify-content: space-between; flex-wrap: wrap; }
+.on-air-song { margin: 0 0 8px; font-size: 16px; font-weight: 600; }
+.output-details { margin: 0; padding-left: 20px; color: var(--ink-2); }
+.storage-warning { color: var(--amber); }
+button.danger { background: #511f24; border-color: #a9434e; color: #fff0f0; }
+button.danger:hover { background: #702a31; }
+[hidden] { display: none !important; }

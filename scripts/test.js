@@ -18,6 +18,7 @@ const suites = ui
       'roster-editor',
       'match-desk',
       'v2',
+      'concert-ui',
     ]
   : ['regression', 'd200'];
 
@@ -39,6 +40,8 @@ if (!ui) run([
   'tests/concert.test.js',
   'tests/concert-layout.test.js',
   'tests/concert-workspace.test.js',
+  'tests/concert-renderers.test.js',
+  'tests/concert-production.test.js',
   'tests/ae-live.test.js',
   'tests/stage-concert.test.js',
   'tests/stage-bug.test.js',

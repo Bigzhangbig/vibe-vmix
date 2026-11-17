@@ -50,6 +50,7 @@ fs.writeFileSync(
     .replace('../ae-plugin/README.md', 'AE插件/README.md'),
 );
 fs.copyFileSync(path.join(root, 'docs/BIT_AUTUMN_LIVE.md'), path.join(output, '深秋歌会使用说明.md'));
+fs.copyFileSync(path.join(root, 'docs/AUTUMN_DESIGN_2026.md'), path.join(output, 'AUTUMN_DESIGN_2026.md'));
 // System UI engines are shared. Only the service runtime is bundled.
 fs.mkdirSync(path.join(output, 'runtime'));
 fs.copyFileSync(process.execPath, path.join(output, 'runtime/node.exe'));

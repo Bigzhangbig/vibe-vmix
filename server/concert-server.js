@@ -14,8 +14,8 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { randomUUID } = require('node:crypto');
+const { createRendererRegistry } = require('./concert-renderers');
 const {
-  FONT_FAMILY,
   LAYOUT_VERSION,
   DEFAULT_LAYOUT,
   TEXT_IDS,
@@ -33,13 +33,15 @@ function createConcertServer({ dataDirectory, project = path.resolve(__dirname, 
   fs.mkdirSync(DATA_DIR, { recursive: true });
   for (const name of ['config', 'credits', 'lyrics', 'songs']) {
     const destination = path.join(DATA_DIR, name + '.json');
-    if (!fs.existsSync(destination)) {
+    if (!fs.existsSync(destination) && !fs.existsSync(destination + '.bak')) {
       fs.copyFileSync(path.join(project, 'packages/autumn/data', name + '.json'), destination);
     }
   }
   let stopped = false;
+  const storageWarnings = [];
   const standbyTimers = new Set();
   const pingTimers = new Map();
+  const renderers = createRendererRegistry();
 
   function cancelHandoff() {
     for (const timer of standbyTimers) clearTimeout(timer);
@@ -51,7 +53,7 @@ function createConcertServer({ dataDirectory, project = path.resolve(__dirname, 
   // 角标与主视觉不参与互斥，各自独立开关
 
   const DEFAULT_FONT = {
-    family: FONT_FAMILY,
+    family: 'Microsoft YaHei',
     weight: 700,
     shadow: true,
   };
@@ -76,14 +78,43 @@ function createConcertServer({ dataDirectory, project = path.resolve(__dirname, 
   function readJson(file, fallback) {
     try {
       return JSON.parse(fs.readFileSync(file, 'utf8'));
-    } catch {
-      return fallback;
+    } catch (error) {
+      if (error.code === 'ENOENT' && !fs.existsSync(file + '.bak')) return fallback;
+      let recovered;
+      let recoveredText;
+      try {
+        recoveredText = fs.readFileSync(file + '.bak', 'utf8');
+        recovered = JSON.parse(recoveredText);
+      } catch {
+        throw new Error('无法读取 ' + path.basename(file) + '，请保留原文件并恢复有效备份');
+      }
+      if (fs.existsSync(file)) fs.copyFileSync(file, file + '.corrupt-' + randomUUID());
+      fs.writeFileSync(file + '.tmp', recoveredText, 'utf8');
+      fs.renameSync(file + '.tmp', file);
+      const message = path.basename(file) + ' 已从上一次有效备份恢复，请核对最近修改';
+      storageWarnings.push(message);
+      console.warn('[storage] ' + message);
+      return recovered;
     }
   }
 
   function writeJsonAtomic(file, value) {
     const tmp = file + '.tmp';
     fs.writeFileSync(tmp, JSON.stringify(value, null, 2), 'utf8');
+    if (fs.existsSync(file)) {
+      const previous = fs.readFileSync(file, 'utf8');
+      let valid = false;
+      try {
+        JSON.parse(previous);
+        valid = true;
+      } catch {
+        /* Preserve the healthy backup. */
+      }
+      if (valid) {
+        fs.writeFileSync(file + '.bak.tmp', previous, 'utf8');
+        fs.renameSync(file + '.bak.tmp', file + '.bak');
+      }
+    }
     fs.renameSync(tmp, file);
   }
 
@@ -179,10 +210,13 @@ function createConcertServer({ dataDirectory, project = path.resolve(__dirname, 
   if (config.fadeOut == null) config.fadeOut = 240;
   if (!config.font || typeof config.font !== 'object') config.font = { ...DEFAULT_FONT };
   config.font = { ...DEFAULT_FONT, ...config.font };
-  if (config.font.family === 'Microsoft YaHei') {
-    config.font.family = FONT_FAMILY;
-    writeJsonAtomic(path.join(DATA_DIR, 'config.json'), config);
-  }
+  config.branding = {
+    eventTitle: '深秋歌会',
+    subtitle: '',
+    accent: '#9fdaed',
+    badgeMode: 'original',
+    ...config.branding,
+  };
   if (!config.backgrounds || typeof config.backgrounds !== 'object') {
     config.backgrounds = { ...DEFAULT_BACKGROUNDS };
   }
@@ -268,6 +302,8 @@ function createConcertServer({ dataDirectory, project = path.resolve(__dirname, 
         writeJsonAtomic(path.join(DATA_DIR, 'state.json'), state);
       } catch (err) {
         console.error('[state] 保存失败:', err.message);
+        const warning = '播出状态保存失败：' + err.message;
+        if (!storageWarnings.includes(warning)) storageWarnings.push(warning);
       }
     }, 300);
   }
@@ -293,7 +329,9 @@ function createConcertServer({ dataDirectory, project = path.resolve(__dirname, 
         fadeIn: config.fadeIn != null ? Number(config.fadeIn) : 320,
         fadeOut: config.fadeOut != null ? Number(config.fadeOut) : 240,
         font: { ...config.font },
+        branding: { ...config.branding },
       },
+      storageWarnings: storageWarnings.slice(),
     };
   }
 
@@ -341,9 +379,10 @@ function createConcertServer({ dataDirectory, project = path.resolve(__dirname, 
   function setChannelOff(channel, reason) {
     if (!state.channels[channel] || !state.channels[channel].on) return;
     state.channels[channel].on = false;
-    if (channel === 'visual') {
-      void vmixCall('OverlayInput' + config.vmix.overlay + 'Out', null);
-    }
+    const vmixResult =
+      channel === 'visual'
+        ? vmixCall('OverlayInput' + config.vmix.overlay + 'Out', null)
+        : undefined;
     broadcast({
       type: 'cue',
       tick: nextTick(),
@@ -363,6 +402,7 @@ function createConcertServer({ dataDirectory, project = path.resolve(__dirname, 
       }, 350);
       standbyTimers.add(timer);
     }
+    return vmixResult;
   }
 
   async function vmixCall(fn, input) {
@@ -382,9 +422,63 @@ function createConcertServer({ dataDirectory, project = path.resolve(__dirname, 
    * 执行一条切换台命令。
    * @returns {Promise<object>} 供 HTTP 响应回显
    */
+  function activateSong(song, emit = true) {
+    const nextLyrics = (song.lyrics || []).map((line) => String(line));
+    if (nextLyrics[0] !== '') nextLyrics.unshift('');
+    const nextSongs = { ...songsDoc, currentId: song.id };
+    const lyricFile = path.join(DATA_DIR, 'lyrics.json');
+    const previousLyrics = fs.readFileSync(lyricFile, 'utf8');
+    writeJsonAtomic(lyricFile, { lines: nextLyrics });
+    try {
+      writeJsonAtomic(path.join(DATA_DIR, 'songs.json'), nextSongs);
+    } catch (error) {
+      fs.writeFileSync(lyricFile + '.tmp', previousLyrics, 'utf8');
+      fs.renameSync(lyricFile + '.tmp', lyricFile);
+      throw error;
+    }
+    const wasOn = state.channels.lyric.on;
+    const announcement = state.channels.announce;
+    const text = '《' + song.title + '》' + (song.performer ? '\n演唱：' + song.performer : '');
+    lyrics = nextLyrics;
+    songsDoc = nextSongs;
+    state.channels.lyric = { on: wasOn, index: 0, text: '', auto: false, hold: 0 };
+    state.channels.announce = {
+      ...announcement,
+      text,
+      playbackId: announcement.on ? randomUUID() : announcement.playbackId,
+    };
+    cancelHandoff();
+    markDirty();
+    if (!emit) return;
+    if (announcement.on)
+      broadcast({
+        type: 'cue',
+        tick: nextTick(),
+        channel: 'announce',
+        action: 'cue',
+        payload: { text, playbackId: state.channels.announce.playbackId },
+      });
+    if (wasOn)
+      broadcast({
+        type: 'cue',
+        tick: nextTick(),
+        channel: 'lyric',
+        action: 'cue',
+        payload: { index: 0, text: '', auto: false, total: lyrics.length },
+      });
+    broadcast({ type: 'snapshot', state: snapshot() });
+  }
+
   async function command(channel, action, payload = {}) {
     if (!state.channels[channel]) {
       return { ok: false, error: '未知通道: ' + channel };
+    }
+    if (payload.songId !== undefined) {
+      if (!['announce', 'lyric'].includes(channel) || action === 'off')
+        return { ok: false, error: '只能在报幕或歌词上屏时选择歌曲' };
+      const song = songsDoc.songs.find((song) => song.id === payload.songId);
+      if (!song) return { ok: false, error: '歌曲不存在' };
+      activateSong(song, false);
     }
     if (EXCLUSIVE.includes(channel)) cancelHandoff();
 
@@ -684,6 +778,9 @@ function createConcertServer({ dataDirectory, project = path.resolve(__dirname, 
     if (pathname === '/api/state' && req.method === 'GET') {
       return sendJson(res, 200, snapshot());
     }
+    if (pathname === '/api/renderers' && req.method === 'GET') {
+      return sendJson(res, 200, renderers.snapshot());
+    }
 
     if (pathname === '/api/manifest' && req.method === 'GET') {
       return sendJson(res, 200, buildManifest());
@@ -707,6 +804,13 @@ function createConcertServer({ dataDirectory, project = path.resolve(__dirname, 
 
     if (req.method === 'POST') {
       if (!sameOrigin(req)) return sendJson(res, 403, { error: '来源不合法' });
+      if (pathname === '/api/renderer') {
+        try {
+          return sendJson(res, 200, renderers.report(await readBody(req)));
+        } catch (error) {
+          return sendJson(res, 400, { error: error.message });
+        }
+      }
 
       if (pathname === '/api/assets/import') {
         try {
@@ -752,11 +856,18 @@ function createConcertServer({ dataDirectory, project = path.resolve(__dirname, 
           if (!target.startsWith(IMPORT_DIR + path.sep) || !fs.existsSync(target)) {
             return sendJson(res, 400, { error: '只能删除导入的素材' });
           }
+          const nextConfig = structuredClone(config);
           for (const ch of BACKGROUND_CHANNELS) {
-            if (config.backgrounds[ch] === file) config.backgrounds[ch] = '';
+            if (nextConfig.backgrounds[ch] === file) nextConfig.backgrounds[ch] = '';
           }
-          fs.unlinkSync(target);
-          writeJsonAtomic(path.join(DATA_DIR, 'config.json'), config);
+          writeJsonAtomic(path.join(DATA_DIR, 'config.json'), nextConfig);
+          try {
+            fs.unlinkSync(target);
+          } catch (error) {
+            writeJsonAtomic(path.join(DATA_DIR, 'config.json'), config);
+            throw error;
+          }
+          config = nextConfig;
           broadcast({ type: 'snapshot', state: snapshot() });
           return sendJson(res, 200, { ok: true });
         } catch (err) {
@@ -771,8 +882,9 @@ function createConcertServer({ dataDirectory, project = path.resolve(__dirname, 
           if (!BACKGROUND_CHANNELS.includes(ch)) return sendJson(res, 400, { error: '未知通道' });
           const file = String(body.file || '').trim();
           if (file && !findAsset(file)) return sendJson(res, 400, { error: '素材不存在' });
-          config.backgrounds[ch] = file;
-          writeJsonAtomic(path.join(DATA_DIR, 'config.json'), config);
+          const nextConfig = { ...config, backgrounds: { ...config.backgrounds, [ch]: file } };
+          writeJsonAtomic(path.join(DATA_DIR, 'config.json'), nextConfig);
+          config = nextConfig;
           broadcast({ type: 'snapshot', state: snapshot() });
           return sendJson(res, 200, { ok: true, backgrounds: config.backgrounds });
         } catch (err) {
@@ -784,7 +896,9 @@ function createConcertServer({ dataDirectory, project = path.resolve(__dirname, 
         try {
           const body = await readBody(req);
           if (!Array.isArray(body.songs)) return sendJson(res, 400, { error: 'songs 必须是数组' });
-          const songs = body.songs.slice(0, 200).map((s, i) => {
+          if (body.songs.length > 200)
+            return sendJson(res, 400, { error: '歌曲数量不能超过 200，原歌单已保留' });
+          const songs = body.songs.map((s, i) => {
             // 空行是歌词的一部分（句间留白），首行固定补一个空行
             const lines = Array.isArray(s.lyrics)
               ? s.lyrics.map((l) => String(l).slice(0, 200))
@@ -802,11 +916,12 @@ function createConcertServer({ dataDirectory, project = path.resolve(__dirname, 
               lyrics,
             };
           });
-          songsDoc = {
+          const nextSongs = {
             songs,
             currentId: body.currentId != null ? String(body.currentId) : songsDoc.currentId,
           };
-          writeJsonAtomic(path.join(DATA_DIR, 'songs.json'), songsDoc);
+          writeJsonAtomic(path.join(DATA_DIR, 'songs.json'), nextSongs);
+          songsDoc = nextSongs;
           broadcast({ type: 'snapshot', state: snapshot() });
           return sendJson(res, 200, { ok: true, songs: songsDoc.songs });
         } catch (err) {
@@ -820,54 +935,7 @@ function createConcertServer({ dataDirectory, project = path.resolve(__dirname, 
           const id = String(body.id || '');
           const song = songsDoc.songs.find((s) => s.id === id);
           if (!song) return sendJson(res, 400, { error: '歌曲不存在' });
-          songsDoc.currentId = id;
-          lyrics = (song.lyrics || []).map((l) => String(l));
-          // 数据约定：歌词第一行固定是空行，屏幕上先只有背景
-          if (!lyrics.length) lyrics = [''];
-          else if (lyrics[0] !== '') lyrics.unshift('');
-          // 切节目回到第一句；如果歌词正在上屏，同步替换成新节目的第一句
-          const lch = state.channels.lyric;
-          const wasOn = !!(lch && lch.on);
-          state.channels.lyric = {
-            on: wasOn,
-            index: 0,
-            text: lyrics[0] || '',
-            auto: false,
-            hold: 0,
-          };
-          // 报幕文本跟着节目走：只给曲名和演唱者，不加「第 x 个节目」
-          const annLines = ['《' + song.title + '》'];
-          if (song.performer) annLines.push('演唱：' + song.performer);
-          const annText = annLines.join('\n');
-          const ach = state.channels.announce || {};
-          cancelHandoff();
-          state.channels.announce = {
-            ...ach,
-            text: annText,
-            playbackId: ach.on ? randomUUID() : ach.playbackId,
-          };
-          writeJsonAtomic(path.join(DATA_DIR, 'songs.json'), songsDoc);
-          writeJsonAtomic(path.join(DATA_DIR, 'lyrics.json'), { lines: lyrics });
-          markDirty();
-          if (ach.on) {
-            broadcast({
-              type: 'cue',
-              tick: nextTick(),
-              channel: 'announce',
-              action: 'cue',
-              payload: { text: annText, playbackId: state.channels.announce.playbackId },
-            });
-          }
-          if (wasOn) {
-            broadcast({
-              type: 'cue',
-              tick: nextTick(),
-              channel: 'lyric',
-              action: 'cue',
-              payload: { index: 0, text: lyrics[0] || '', auto: false, total: lyrics.length },
-            });
-          }
-          broadcast({ type: 'snapshot', state: snapshot() });
+          activateSong(song);
           return sendJson(res, 200, { ok: true, song });
         } catch (err) {
           return sendJson(res, 400, { error: err.message });
@@ -878,22 +946,46 @@ function createConcertServer({ dataDirectory, project = path.resolve(__dirname, 
         try {
           const body = await readBody(req);
           const result = await command(body.channel, body.action || 'on', body.payload || {});
+          if (result.ok && body.payload?.songId !== undefined)
+            broadcast({ type: 'snapshot', state: snapshot() });
           return sendJson(res, result.ok === false ? 400 : 200, result);
         } catch (err) {
           return sendJson(res, 400, { error: err.message });
         }
       }
 
+      if (pathname === '/api/clear') {
+        cancelHandoff();
+        let vmixResult;
+        for (const channel of Object.keys(state.channels)) {
+          const result = setChannelOff(channel, 'clear');
+          if (channel === 'visual') vmixResult = result;
+        }
+        const vmix = await (vmixResult ||
+          vmixCall('OverlayInput' + config.vmix.overlay + 'Out', null));
+        return sendJson(res, 200, { ok: true, vmix });
+      }
+
       if (pathname === '/api/layout') {
         try {
           const body = await readBody(req);
           const items = Array.isArray(body.items) ? body.items : [body];
+          const draftLayout = structuredClone(state.layout);
           const applied = [];
           for (const item of items) {
-            const patch = applyLayoutPatch(item);
+            const patch = applyLayoutPatch(item, draftLayout);
             if (patch.error) return sendJson(res, 400, { error: patch.error });
             applied.push(item.id);
           }
+          state.layout = draftLayout;
+          if (
+            items.some(
+              (item) =>
+                ['announceBg', 'announceText'].includes(item?.id) &&
+                ['x', 'y', 'w', 'h', 'size', 'scale'].some((key) => Object.hasOwn(item, key)),
+            )
+          )
+            state.announcePlacement = 'custom';
           markDirty();
           broadcast({
             type: 'layout',
@@ -1001,8 +1093,9 @@ function createConcertServer({ dataDirectory, project = path.resolve(__dirname, 
           // 空行保留：歌词里用空行做句间留白；首行同样固定补一个空行
           const kept = list.map((s) => String(s).trim()).filter((line) => !/^[\[【(（]/.test(line));
           while (kept.length && !kept[kept.length - 1]) kept.pop();
-          lyrics = kept.length && kept[0] === '' ? kept : [''].concat(kept);
-          writeJsonAtomic(path.join(DATA_DIR, 'lyrics.json'), { lines: lyrics });
+          const nextLyrics = kept.length && kept[0] === '' ? kept : [''].concat(kept);
+          writeJsonAtomic(path.join(DATA_DIR, 'lyrics.json'), { lines: nextLyrics });
+          lyrics = nextLyrics;
           state.channels.lyric.index = Math.min(
             state.channels.lyric.index,
             Math.max(0, lyrics.length - 1),
@@ -1020,7 +1113,7 @@ function createConcertServer({ dataDirectory, project = path.resolve(__dirname, 
           const body = await readBody(req);
           if (!Array.isArray(body.groups))
             return sendJson(res, 400, { error: 'groups 必须是数组' });
-          creditsDoc = {
+          const nextCredits = {
             groups: body.groups.map((g) => ({
               role: String(g.role || '').trim() || '名单',
               names: (Array.isArray(g.names) ? g.names : [])
@@ -1028,7 +1121,8 @@ function createConcertServer({ dataDirectory, project = path.resolve(__dirname, 
                 .filter(Boolean),
             })),
           };
-          writeJsonAtomic(path.join(DATA_DIR, 'credits.json'), creditsDoc);
+          writeJsonAtomic(path.join(DATA_DIR, 'credits.json'), nextCredits);
+          creditsDoc = nextCredits;
           broadcast({ type: 'credits', tick: nextTick(), credits: creditsDoc });
           return sendJson(res, 200, { ok: true, groups: creditsDoc.groups.length });
         } catch (err) {
@@ -1039,35 +1133,52 @@ function createConcertServer({ dataDirectory, project = path.resolve(__dirname, 
       if (pathname === '/api/config') {
         try {
           const body = await readBody(req);
+          const nextConfig = structuredClone(config);
           let changed = false;
+          if (body.branding !== undefined) {
+            const branding = body.branding;
+            if (!branding || Array.isArray(branding) || typeof branding !== 'object')
+              return sendJson(res, 400, { error: '品牌设置格式无效' });
+            for (const [key, value] of Object.entries(branding)) {
+              const valid =
+                (key === 'eventTitle' && typeof value === 'string' && value.length <= 40) ||
+                (key === 'subtitle' && typeof value === 'string' && value.length <= 60) ||
+                (key === 'accent' && typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value)) ||
+                (key === 'badgeMode' && ['original', 'text'].includes(value));
+              if (!valid) return sendJson(res, 400, { error: '品牌设置字段无效：' + key });
+            }
+            nextConfig.branding = { ...nextConfig.branding, ...branding };
+            changed = true;
+          }
           if (body.vmix && typeof body.vmix === 'object') {
-            config.vmix = { ...config.vmix, ...body.vmix, enabled: !!body.vmix.enabled };
+            nextConfig.vmix = { ...nextConfig.vmix, ...body.vmix, enabled: !!body.vmix.enabled };
             changed = true;
           }
           if (body.fadeIn != null) {
-            config.fadeIn = clampNum(body.fadeIn, config.fadeIn, 0, 3000);
+            nextConfig.fadeIn = clampNum(body.fadeIn, nextConfig.fadeIn, 0, 3000);
             changed = true;
           }
           if (body.fadeOut != null) {
-            config.fadeOut = clampNum(body.fadeOut, config.fadeOut, 0, 3000);
+            nextConfig.fadeOut = clampNum(body.fadeOut, nextConfig.fadeOut, 0, 3000);
             changed = true;
           }
           if (body.font && typeof body.font === 'object') {
             if (typeof body.font.family === 'string' && FONT_RE.test(body.font.family.trim())) {
-              config.font.family = body.font.family.trim();
+              nextConfig.font.family = body.font.family.trim();
               changed = true;
             }
             if (body.font.weight != null) {
-              config.font.weight = clampNum(body.font.weight, config.font.weight, 100, 900);
+              nextConfig.font.weight = clampNum(body.font.weight, nextConfig.font.weight, 100, 900);
               changed = true;
             }
             if (body.font.shadow != null) {
-              config.font.shadow = !!body.font.shadow;
+              nextConfig.font.shadow = !!body.font.shadow;
               changed = true;
             }
           }
           if (!changed) return sendJson(res, 400, { error: '没有可更新的字段' });
-          writeJsonAtomic(path.join(DATA_DIR, 'config.json'), config);
+          writeJsonAtomic(path.join(DATA_DIR, 'config.json'), nextConfig);
+          config = nextConfig;
           broadcast({ type: 'config', tick: nextTick(), config: snapshot().config });
           return sendJson(res, 200, { ok: true, config: snapshot().config });
         } catch (err) {
@@ -1118,10 +1229,10 @@ function createConcertServer({ dataDirectory, project = path.resolve(__dirname, 
   const COLOR_RE = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
 
   /** 校验并写入一个元素的布局与排版，返回 { id } 或 { error } */
-  function applyLayoutPatch(body) {
+  function applyLayoutPatch(body, layout) {
     const id = String((body && body.id) || '');
     if (!DEFAULT_LAYOUT[id]) return { error: '未知元素: ' + id };
-    const current = state.layout[id] || { ...DEFAULT_LAYOUT[id] };
+    const current = layout[id] || { ...DEFAULT_LAYOUT[id] };
     const next = { ...current };
     // 允许负坐标：全屏背景可以整块平移（带着文字一起走），只要不无限跑掉
     if (body.x != null) next.x = clampNum(body.x, current.x, -4000, 4000);
@@ -1157,12 +1268,7 @@ function createConcertServer({ dataDirectory, project = path.resolve(__dirname, 
       if (body.glowOpacity != null)
         next.glowOpacity = clampNum(body.glowOpacity, current.glowOpacity, 0, 100);
     }
-    state.layout[id] = next;
-    if (
-      ['announceBg', 'announceText'].includes(id) &&
-      ['x', 'y', 'w', 'h', 'size', 'scale'].some((key) => Object.hasOwn(body, key))
-    )
-      state.announcePlacement = 'custom';
+    layout[id] = next;
     return { id };
   }
 
@@ -1184,7 +1290,11 @@ function createConcertServer({ dataDirectory, project = path.resolve(__dirname, 
     }
     pingTimers.clear();
     clients.clear();
-    writeJsonAtomic(path.join(DATA_DIR, 'state.json'), state);
+    try {
+      writeJsonAtomic(path.join(DATA_DIR, 'state.json'), state);
+    } catch (error) {
+      console.error('[state] 退出时保存失败，已有文件保留:', error.message);
+    }
   };
   server.on('close', server.pauseClocks);
   return server;

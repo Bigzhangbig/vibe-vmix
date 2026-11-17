@@ -28,6 +28,27 @@
 
 <main class="grid cols-config">
   <section class="card">
+    <div class="card-head"><h2>本届包装</h2></div>
+    <label class="field">活动名称
+      <input id="brandEventTitle" type="text" maxlength="40" value="深秋歌会">
+    </label>
+    <label class="field">主题或阶段
+      <input id="brandSubtitle" type="text" maxlength="60" placeholder="可留空，确认后填写今年主题">
+    </label>
+    <label class="field">强调色
+      <input id="brandAccent" type="color" value="#9fdaed">
+    </label>
+    <label class="field">角标样式
+      <select id="brandBadgeMode">
+        <option value="original">原素材动画</option>
+        <option value="text">可编辑文字</option>
+      </select>
+    </label>
+    <p class="hint">沿用青蓝、纸飞机与校园素材。应用后使用可编辑文字角标，并统一晋级与片尾标题色。歌曲和手调布局保留。</p>
+    <button id="btnApplyBranding" class="primary">应用本届包装</button>
+    <button id="btnOriginalBadge" class="mini ghost">恢复原素材角标</button>
+  </section>
+  <section class="card">
     <div class="card-head"><h2>运行状态</h2><span id="runPill" class="pill">—</span></div>
     <dl class="kv">
       <dt>服务</dt><dd><code id="runOrigin">—</code></dd>
@@ -61,7 +82,7 @@
     <p class="hint">只影响没有单独设置字体的元素；每个元素仍可在「字体」页覆盖。</p>
     <label class="field">字体
       <select id="fontFamily">
-        <option value="Shanggu Sans SC">尚古黑体（工作区）</option>
+        <option value="Shanggu Sans SC">尚古黑体（需自行安装）</option>
         <option value="Microsoft YaHei">微软雅黑</option>
         <option value="SimHei">黑体</option>
         <option value="SimSun">宋体</option>
