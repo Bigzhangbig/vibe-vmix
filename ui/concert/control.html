@@ -1,0 +1,127 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>深秋歌会 · 直播</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand"><strong>深秋歌会</strong><span>直播切换</span></div>
+  <nav class="nav">
+    <a href="control.html" class="active">直播</a>
+    <a href="songs.html">歌曲</a>
+    <a href="assets.html">素材</a>
+    <a href="edit.html">编辑</a>
+    <a href="config.html">配置</a>
+  </nav>
+  <div class="topbar-mid"></div>
+  <button class="mini ghost" data-open-graphics>显示上屏</button>
+  <span id="conn" class="pill">连接中…</span>
+</header>
+
+<main class="page live-wrap">
+  <section class="live-main">
+
+    <!-- 节目：报幕 + 歌词 -->
+    <article class="card chan" id="card-program">
+      <header class="chan-head">
+        <div class="chan-title"><b>节目</b><span>报幕与歌词</span></div>
+        <div class="lamps">
+          <span class="lamp" id="lamp-announce"><i></i>报幕</span>
+          <span class="lamp" id="lamp-lyric"><i></i>歌词</span>
+        </div>
+      </header>
+
+      <div class="field">
+        <span>当前节目</span>
+        <select id="songSelect"></select>
+        <div class="hint" id="songMeta">—</div>
+      </div>
+
+      <div class="field">
+        <span>报幕文本 <button id="btnFillAnnounce" class="mini ghost">填入默认</button></span>
+        <textarea id="announceText" rows="3" placeholder="手动填写，或点「填入默认」按当前节目生成"></textarea>
+      </div>
+
+      <div class="row3">
+        <button id="btn-announce" class="chan-toggle big">报幕上屏</button>
+      </div>
+
+      <hr class="split">
+
+      <div class="lyric-head">
+        <span class="lyric-label">歌词</span>
+        <span class="lyric-pos" id="lyricPos">0 / 0</span>
+      </div>
+      <div class="lyric-line" id="lyricLine">—</div>
+
+      <div class="lyric-acts">
+        <button id="btn-next" class="chan-toggle big">下一句</button>
+        <button id="btn-lyric" class="chan-toggle big">歌词上屏</button>
+        <button id="btn-prev" class="mini ghost">上一句</button>
+      </div>
+    </article>
+
+    <div class="grid two">
+      <!-- 晋级 -->
+      <article class="card chan" id="card-qualify">
+        <header class="chan-head">
+          <div class="chan-title"><b>晋级</b><span>文本框</span></div>
+          <div class="chan-side">
+            <span class="lamp" id="lamp-qualify"><i></i>On Air</span>
+            <button id="btn-qualify" class="chan-toggle big">上屏</button>
+          </div>
+        </header>
+        <div class="field"><span>标题</span><input id="qualifyTitle" type="text" value="晋级" maxlength="24"></div>
+        <div class="field"><span>内容</span><textarea id="qualifyText" rows="4" placeholder="晋级选手 / 下一轮信息"></textarea></div>
+      </article>
+
+      <!-- 结尾 -->
+      <article class="card chan" id="card-credits">
+        <header class="chan-head">
+          <div class="chan-title"><b>结尾名单</b><span>滚动字幕</span></div>
+          <div class="chan-side">
+            <span class="lamp" id="lamp-credits"><i></i>On Air</span>
+            <button id="btn-credits-pause" class="mini" hidden>暂停滚动</button>
+            <button id="btn-credits" class="chan-toggle big">上屏</button>
+          </div>
+        </header>
+        <div class="field"><span>滚动速度（像素/秒）</span><input id="creditsSpeed" type="number" min="10" max="200" step="5" value="40"></div>
+        <p class="hint">名单内容在「配置页 · 结尾名单」里维护。</p>
+      </article>
+      <!-- 角标 -->
+      <article class="card chan" id="card-badge">
+        <header class="chan-head">
+          <div class="chan-title"><b>角标</b><span>纸飞机动画</span></div>
+          <div class="chan-side">
+            <span class="lamp" id="lamp-badge"><i></i>On Air</span>
+            <button id="btn-badge" class="chan-toggle big">上屏</button>
+          </div>
+        </header>
+        <p class="hint">素材与位置在素材页调整。</p>
+      </article>
+
+      <!-- 主视觉 -->
+      <article class="card chan" id="card-visual">
+        <header class="chan-head">
+          <div class="chan-title"><b>主视觉</b><span>vMix 视频输入</span></div>
+          <div class="chan-side">
+            <span class="lamp" id="lamp-visual"><i></i>On Air</span>
+            <button id="btn-visual" class="chan-toggle big">上屏</button>
+          </div>
+        </header>
+        <p class="hint">通过 vMix HTTP API 控制 overlay，需要在配置页启用并填好输入名。</p>
+      </article>
+    </div>
+
+  </section>
+</main>
+
+<div id="toast" class="toast"></div>
+<script src="common.js"></script>
+<script src="control.js"></script>
+</body>
+</html>

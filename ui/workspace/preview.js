@@ -1,6 +1,7 @@
 'use strict';
 const $ = (id) => document.getElementById(id);
 const definitions = {
+  concert: [],
   football: [
     ['sb', '比分牌'],
     ['clk', '比赛计时'],
@@ -22,8 +23,13 @@ const definitions = {
   ],
   'ae-live': [['frame', 'AE 画面']],
 };
-const names = { football: '足球赛事', stage: '舞台节目', 'ae-live': 'AE 直播连接' };
-const order = ['football', 'stage', 'ae-live'];
+const names = {
+  football: '足球赛事',
+  stage: '舞台节目',
+  'ae-live': 'AE 直播连接',
+  concert: '深秋歌会',
+};
+const order = ['football', 'stage', 'ae-live', 'concert'];
 const base = {},
   draft = {},
   boxes = {};
@@ -318,6 +324,8 @@ function renderTabs() {
   }
 }
 function outputUrl(module, kind) {
+  if (module.id === 'concert')
+      return module.url + '/graphics.html?clean=1&observer=1' + (kind === 'pvw' ? '&preview=1' : '');
   const route =
     module.id === 'football'
       ? '/titles/graphics.html'
@@ -332,6 +340,9 @@ function renderScreens() {
   $('pgmPanel').hidden = view === 'pvw';
   $('screens').classList.toggle('single', view !== 'dual');
   $('screenNote').hidden = tab !== 'all';
+  const concert = active.find((item) => item.id === 'concert');
+  $('concertEditor').hidden = !concert;
+  $('concertEditor').href = concert ? concert.url + '/edit.html' : '#';
   for (const kind of ['pvw', 'pgm']) {
     const canvas = $(kind + 'Canvas');
     canvas.querySelectorAll('iframe').forEach((frame) => frame.remove());
@@ -375,6 +386,7 @@ async function refresh() {
     modules = next;
     if (tab !== 'all' && !modules.some((item) => item.id === tab)) tab = 'all';
     for (const module of modules) {
+      if (module.id === 'concert') continue;
       const current = (await api('/api/workspace/layout/' + module.id)).layout;
       if (!base[module.id]) base[module.id] = current;
       else

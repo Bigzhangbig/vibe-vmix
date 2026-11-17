@@ -4,11 +4,12 @@ let model, active;
 function output(module) {
   return (
     module.url +
-    (module.id === 'stage'
-      ? '/stage/graphics.html'
-      : module.id === 'ae-live'
-        ? '/ae/graphics.html'
-        : '/titles/graphics.html')
+    (module.outputPath ||
+      (module.id === 'stage'
+        ? '/stage/graphics.html'
+        : module.id === 'ae-live'
+          ? '/ae/graphics.html'
+          : '/titles/graphics.html'))
   );
 }
 async function request(payload) {
@@ -43,11 +44,12 @@ function open(module) {
   byId('moduleAddress').textContent = output(module);
   byId('moduleFrame').src =
     module.url +
-    (module.id === 'stage'
-      ? '/stage/control.html'
-      : module.id === 'ae-live'
-        ? '/ae/control.html'
-        : '/control/panel.html');
+    (module.controlPath ||
+      (module.id === 'stage'
+        ? '/stage/control.html'
+        : module.id === 'ae-live'
+          ? '/ae/control.html'
+          : '/control/panel.html'));
   document
     .querySelectorAll('#navigation button')
     .forEach((button) =>
@@ -114,6 +116,10 @@ byId('moduleForm').onsubmit = async (event) => {
 };
 byId('manage').onclick = manage;
 function openPreview(id) {
+  if (active?.editorPath && (!id || id === active.id)) {
+    window.open(active.url + active.editorPath, '_blank');
+    return;
+  }
   const module = id || active?.id || 'all';
   if (window.chrome?.webview) window.chrome.webview.postMessage({ type: 'open-preview', module });
   else window.open('/workspace/preview.html?module=' + encodeURIComponent(module), '_blank');

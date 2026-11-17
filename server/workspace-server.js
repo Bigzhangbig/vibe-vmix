@@ -11,6 +11,16 @@ const { listenLocal, closeLocal } = require('./listen-local');
 // Metadata is intentionally independent of module code, assets and state.
 const catalog = [
   {
+    id: 'concert',
+    name: '深秋歌会',
+    description: '使用歌会原版视频素材的直播包装台',
+    features: ['报幕', '逐句歌词', '晋级名单', '滚动字幕', '纸飞机角标', '版式编辑'],
+    port: 8127,
+    controlPath: '/control.html',
+    outputPath: '/graphics.html',
+    editorPath: '/edit.html',
+  },
+  {
     id: 'stage',
     name: '舞台节目',
     description: '歌唱、舞蹈、武术与综合演出',
@@ -137,7 +147,7 @@ function createWorkspaceServer({
         url: loaded.get(entry.id)?.url || null,
       })),
       loaded: [...loaded.keys()],
-      version: '2.0.0-beta.2',
+      version: '2.0.0-beta.2-bit-autumn.1',
     };
   }
   function validate(ids) {
@@ -152,7 +162,12 @@ function createWorkspaceServer({
   async function load(id) {
     const entry = catalog.find((item) => item.id === id);
     let service;
-    if (id === 'football') {
+    if (id === 'concert') {
+      service = require('./concert-server').createConcertServer({
+        dataDirectory: path.join(dataDirectory, 'concert'),
+        project,
+      });
+    } else if (id === 'football') {
       // The require and its complete dependency tree run only after selection.
       service = require('./football-server').createFootballServer({
         stateFile: path.join(dataDirectory, 'state.json'),

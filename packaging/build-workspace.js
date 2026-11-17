@@ -49,6 +49,7 @@ fs.writeFileSync(
     .readFileSync(path.join(root, 'docs/WORKSPACE_2.md'), 'utf8')
     .replace('../ae-plugin/README.md', 'AE插件/README.md'),
 );
+fs.copyFileSync(path.join(root, 'docs/BIT_AUTUMN_LIVE.md'), path.join(output, '深秋歌会使用说明.md'));
 // System UI engines are shared. Only the service runtime is bundled.
 fs.mkdirSync(path.join(output, 'runtime'));
 fs.copyFileSync(process.execPath, path.join(output, 'runtime/node.exe'));
@@ -98,7 +99,7 @@ fs.writeFileSync(
 fs.mkdirSync(path.join(output, 'data'));
 fs.writeFileSync(
   path.join(output, 'data/workspace.json'),
-  JSON.stringify({ enabled: [] }, null, 2),
+  JSON.stringify({ enabled: ['concert'] }, null, 2),
 );
 fs.writeFileSync(
   path.join(output, '先读我.txt'),

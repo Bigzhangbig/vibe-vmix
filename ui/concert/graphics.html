@@ -1,0 +1,48 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>深秋歌会 · 上屏</title>
+<link rel="stylesheet" href="graphics.css">
+</head>
+<body>
+<div id="stage">
+  <!-- 报幕 -->
+  <video id="el-announceBg" class="el" data-el="announceBg" muted playsinline preload="auto"></video>
+  <div id="el-announceText" class="el text-box" data-el="announceText">
+    <div class="text-inner" id="announceTextInner"></div>
+  </div>
+
+  <!-- 歌词 -->
+  <video id="el-lyricBg" class="el" data-el="lyricBg" muted playsinline loop preload="auto"></video>
+  <div id="el-lyricText" class="el text-box lyric-box" data-el="lyricText">
+    <div class="text-inner" id="lyricTextInner"></div>
+  </div>
+
+  <!-- 晋级：标题与内容各自独立定位、独立排版 -->
+  <video id="el-qualifyBg" class="el" data-el="qualifyBg" muted playsinline loop preload="auto"></video>
+  <div id="el-qualifyTitle" class="el text-box qualify-title-box" data-el="qualifyTitle">
+    <div class="text-inner" id="qualifyTitleInner">晋级</div>
+  </div>
+  <div id="el-qualifyText" class="el text-box qualify-box" data-el="qualifyText">
+    <div class="text-inner" id="qualifyTextInner"></div>
+  </div>
+
+  <!-- 结尾字幕 -->
+  <video id="el-creditsBg" class="el" data-el="creditsBg" muted playsinline loop preload="auto"></video>
+  <div id="el-creditsText" class="el credits-box" data-el="creditsText">
+    <div class="credits-scroll" id="creditsScroll"></div>
+  </div>
+
+  <!-- 角标 -->
+  <video id="el-badge" class="el" data-el="badge" muted playsinline loop preload="auto"></video>
+
+
+</div>
+
+<div id="editHud" class="edit-hud"></div>
+<div id="conn" class="conn">连接中…</div>
+
+<script src="graphics.js"></script>
+</body>
+</html>

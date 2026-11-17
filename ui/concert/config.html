@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>深秋歌会 · 配置</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <strong>深秋歌会</strong>
+    <span>配置与状态</span>
+  </div>
+  <nav class="nav">
+    <a href="control.html">直播</a>
+    <a href="songs.html">歌曲</a>
+    <a href="assets.html">素材</a>
+    <a href="edit.html">编辑</a>
+    <a href="config.html" class="active">配置</a>
+  </nav>
+  <div class="topbar-right">
+    <span id="conn" class="pill">连接中</span>
+    <button class="mini ghost" data-open-graphics>显示上屏</button>
+    <button id="btnSave" class="primary">保存全部</button>
+  </div>
+</header>
+
+<main class="grid cols-config">
+  <section class="card">
+    <div class="card-head"><h2>运行状态</h2><span id="runPill" class="pill">—</span></div>
+    <dl class="kv">
+      <dt>服务</dt><dd><code id="runOrigin">—</code></dd>
+      <dt>运行时长</dt><dd id="runUptime">—</dd>
+      <dt>已连接客户端</dt><dd id="runClients">—</dd>
+      <dt>歌词文件</dt><dd id="runLyrics">—</dd>
+      <dt>当前歌曲</dt><dd id="runSong">—</dd>
+      <dt>素材数量</dt><dd id="runAssets">—</dd>
+    </dl>
+    <div class="card-head sub"><h3>通道状态</h3></div>
+    <div id="chanStates" class="chan-states"></div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>淡入淡出</h2></div>
+    <p class="hint">作用于所有通道的上屏与下屏，包括背景素材与安全画面。0 表示硬切。</p>
+    <label class="field">淡入 <output id="fadeInOut">320</output> 毫秒
+      <input id="fadeIn" type="range" min="0" max="2000" step="10" value="320">
+    </label>
+    <label class="field">淡出 <output id="fadeOutOut">240</output> 毫秒
+      <input id="fadeOut" type="range" min="0" max="2000" step="10" value="240">
+    </label>
+    <div class="row2">
+      <button id="btnFadeFast" class="mini ghost">快速 160 / 120</button>
+      <button id="btnFadeSoft" class="mini ghost">柔和 480 / 360</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>全局字体</h2></div>
+    <p class="hint">只影响没有单独设置字体的元素；每个元素仍可在「字体」页覆盖。</p>
+    <label class="field">字体
+      <select id="fontFamily">
+        <option value="Shanggu Sans SC">尚古黑体（工作区）</option>
+        <option value="Microsoft YaHei">微软雅黑</option>
+        <option value="SimHei">黑体</option>
+        <option value="SimSun">宋体</option>
+        <option value="KaiTi">楷体</option>
+        <option value="FangSong">仿宋</option>
+        <option value="Source Han Sans SC">思源黑体</option>
+        <option value="Noto Sans SC">Noto Sans SC</option>
+        <option value="Arial">Arial</option>
+        <option value="Segoe UI">Segoe UI</option>
+      </select>
+    </label>
+    <div class="row2">
+      <label class="field">粗细
+        <select id="fontWeight">
+          <option value="400">常规</option>
+          <option value="600">中粗</option>
+          <option value="700">粗</option>
+          <option value="800">特粗</option>
+        </select>
+      </label>
+      <label class="cbx"><input type="checkbox" id="fontShadow" checked> 默认带阴影</label>
+    </div>
+  </section>
+
+  <section class="card" id="credits">
+    <div class="card-head">
+      <h2>结尾名单</h2>
+      <button id="btnSaveCredits" class="mini">保存名单</button>
+    </div>
+    <p class="hint">每行一组，格式 <code>角色: 名字1、名字2</code>。开头和结尾的「深秋歌会」由背景显示。</p>
+    <textarea id="creditsText" class="lyrics-area" rows="12" placeholder="主办: 校团委&#10;导演: 张三"></textarea>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>vMix 对接</h2></div>
+    <label class="cbx"><input type="checkbox" id="vmixEnabled"> 启用（控制主视觉 Overlay）</label>
+    <div class="row2">
+      <label class="field">主机
+        <input id="vmixHost" type="text" value="127.0.0.1">
+      </label>
+      <label class="field">端口
+        <input id="vmixPort" type="number" min="1" max="65535" value="8088">
+      </label>
+    </div>
+    <div class="row2">
+      <label class="field">主视觉输入名
+        <input id="vmixInput" type="text" value="MainVisual">
+      </label>
+      <label class="field">Overlay 序号
+        <select id="vmixOverlay">
+          <option value="1">1（主视觉）</option>
+          <option value="2">2</option>
+          <option value="3">3</option>
+          <option value="4">4</option>
+        </select>
+      </label>
+    </div>
+    <p class="hint">vMix 里要打开 Web Controller（默认 8088），主视觉输入的标题必须和这里一致。</p>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>地址</h2></div>
+    <dl class="kv">
+      <dt>上屏（vMix 网页输入）</dt><dd><code id="addrGraphics">—</code></dd>
+      <dt>直播页</dt><dd><code id="addrControl">—</code></dd>
+      <dt>编辑页</dt><dd><code id="addrMonitor">—</code></dd>
+    </dl>
+    <p class="hint">加到 vMix 的是上屏地址，务必勾选输入的 Transparent。</p>
+  </section>
+</main>
+
+<div id="toast" class="toast"></div>
+<script src="common.js"></script>
+<script src="config.js"></script>
+</body>
+</html>

@@ -18,6 +18,8 @@ desktop/seed-state.json
 Thumbs.db
 examples/stage/data/
 data/
+!packages/autumn/data/
+!packages/autumn/data/*.json
 .work/
 
 # Local visual reviews, test screenshots and user-provided backgrounds.

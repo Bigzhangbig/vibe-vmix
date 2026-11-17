@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>深秋歌会 · 歌曲</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><strong>深秋歌会</strong><span>歌曲</span></div>
+  <nav class="nav">
+    <a href="control.html">直播</a>
+    <a href="songs.html" class="active">歌曲</a>
+    <a href="assets.html">素材</a>
+    <a href="edit.html">编辑</a>
+    <a href="config.html">配置</a>
+  </nav>
+  <div class="topbar-right">
+    <button class="mini ghost" data-open-graphics>显示上屏</button>
+    <span id="conn" class="pill">连接中</span>
+  </div>
+</header>
+
+<main class="grid cols-2">
+  <section class="col">
+    <div class="card">
+      <div class="card-head">
+        <h2>曲目列表</h2>
+        <div class="btn-row tight">
+          <button id="btnNew" class="mini ghost">新建</button>
+          <button id="btnSave" class="primary">保存</button>
+        </div>
+      </div>
+      <div id="songList" class="song-list"></div>
+    </div>
+  </section>
+
+  <section class="col">
+    <div class="card">
+      <div class="card-head">
+        <h2>歌曲信息</h2>
+        <span id="curTag" class="tag">未选中</span>
+      </div>
+      <div class="row3">
+        <label class="field">轮次<input id="songRound" type="text" list="roundList" placeholder="第一轮"></label>
+        <label class="field">顺序<input id="songOrder" type="number" min="0" step="1" placeholder="1"></label>
+        <label class="field">曲名<input id="songTitle" type="text" placeholder="例如：深秋"></label>
+      </div>
+      <datalist id="roundList">
+        <option value="第一轮"></option>
+        <option value="第二轮"></option>
+        <option value="第三轮"></option>
+        <option value="串场"></option>
+      </datalist>
+      <div class="row2">
+        <label class="field">表演者<input id="songPerformer" type="text" placeholder="例如：张三"></label>
+        <label class="field">备注<input id="songNote" type="text" placeholder="序号、班级等"></label>
+      </div>
+
+      <div class="card-head sub">
+        <h3>歌词</h3>
+        <div class="btn-row tight">
+          <label class="file-btn">
+            导入 txt
+            <input id="txtInput" type="file" accept=".txt,text/plain" hidden>
+          </label>
+          <button id="btnClearLyrics" class="mini ghost">清空</button>
+        </div>
+      </div>
+      <p class="hint">一行一句。导入的 txt 会自动按空行和换行切分。</p>
+      <textarea id="songLyrics" class="lyrics-area" rows="16" placeholder="每行一句歌词"></textarea>
+      <div class="btn-row">
+        <button id="btnApply" class="primary">保存并设为当前</button>
+        <button id="btnDelete" class="mini ghost danger">删除此曲</button>
+      </div>
+      <div id="saveState" class="hint"></div>
+    </div>
+  </section>
+</main>
+
+<div id="toast" class="toast"></div>
+<script src="common.js"></script>
+<script src="songs.js"></script>
+</body>
+</html>

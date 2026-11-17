@@ -17,7 +17,10 @@ function runtimeFiles(root) {
       if (relative === 'control/assets/console-background.jpg') continue;
       const config = relative.startsWith('packages/') && entry.name.endsWith('.json');
       const catalog = relative === 'modules/football/d200-actions.json';
-      if (ASSET_EXTENSION.test(entry.name) || config || catalog) result.push(relative);
+      const concertMedia =
+        relative.startsWith('packages/autumn/assets/') && /\.(webm|mp4|mov)$/i.test(entry.name);
+      if (ASSET_EXTENSION.test(entry.name) || config || catalog || concertMedia)
+        result.push(relative);
     }
   }
   return result.sort();

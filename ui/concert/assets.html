@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>深秋歌会 · 导入素材</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><strong>深秋歌会</strong><span>导入素材</span></div>
+  <nav class="nav">
+    <a href="control.html">直播</a>
+    <a href="songs.html">歌曲</a>
+    <a href="assets.html" class="active">素材</a>
+    <a href="edit.html">编辑</a>
+    <a href="config.html">配置</a>
+  </nav>
+  <div class="topbar-right">
+    <button class="mini ghost" data-open-graphics>显示上屏</button>
+    <span id="conn" class="pill">连接中</span>
+  </div>
+</header>
+
+<main class="grid cols-2">
+  <section class="col">
+    <div class="card">
+      <div class="card-head">
+        <h2>素材库</h2>
+        <div class="btn-row tight">
+          <label class="file-btn">
+            导入素材
+            <input id="fileInput" type="file" accept="video/webm,video/mp4,video/quicktime,image/png,image/jpeg,image/webp" multiple hidden>
+          </label>
+          <button id="btnReload" class="mini ghost">刷新</button>
+        </div>
+      </div>
+      <p class="hint">支持 WebM / MP4 / MOV / PNG / JPG / WebP。带 alpha 的 WebM 才能透出下层画面。</p>
+      <div id="uploadState" class="hint"></div>
+      <div id="assetList" class="asset-list"></div>
+    </div>
+  </section>
+
+  <section class="col">
+    <div class="card">
+      <div class="card-head"><h2>通道背景</h2></div>
+      <p class="hint">每个部件单独选背景；留空表示不显示背景，只出文字。同一个素材可以同时用在多个部件上，各自的位置和缩放到「编辑」页调整。</p>
+      <div id="bgTable" class="bg-table"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>预览</h2></div>
+      <div class="preview-box">
+        <iframe id="preview" src="/graphics.html?preview=1&clean=1" title="预监"></iframe>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="toast" class="toast"></div>
+<script src="common.js"></script>
+<script src="assets.js"></script>
+</body>
+</html>

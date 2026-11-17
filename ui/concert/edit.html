@@ -1,0 +1,155 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>深秋歌会 · 编辑</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <strong>深秋歌会</strong>
+    <span>位置与字体</span>
+  </div>
+  <nav class="nav">
+    <a href="control.html">直播</a>
+    <a href="songs.html">歌曲</a>
+    <a href="assets.html">素材</a>
+    <a href="edit.html" class="active">编辑</a>
+    <a href="config.html">配置</a>
+  </nav>
+  <div class="topbar-right">
+    <span id="conn" class="pill">连接中</span>
+    <button id="btnResetAll" class="mini ghost">恢复默认位置</button>
+    <button id="btnReload" class="mini ghost">刷新</button>
+  </div>
+</header>
+
+<main class="grid cols-monitor">
+  <section class="col preview-col">
+    <div class="card">
+      <div class="card-head">
+        <h2>预监</h2>
+        <div class="btn-row tight">
+          <button id="btnEdit" class="mini">编辑位置</button>
+          <button id="btnClean" class="mini ghost">新窗口</button>
+        </div>
+      </div>
+      <div class="preview-box big">
+        <iframe id="preview" src="/graphics.html?preview=1&clean=1" title="预监"></iframe>
+      </div>
+      <div class="hint" id="hint">
+        点「编辑位置」后，画面里只显示当前部件，可以直接拖动；方向键微调 1px，Shift + 方向键 10px。
+      </div>
+      <p class="hint">拖动背景要不要带上文字，在配置页的「拖动编组」里开关。</p>
+    </div>
+  </section>
+
+  <section class="col elems-col">
+    <div class="card">
+      <div class="card-head">
+        <h2>选择对象</h2>
+      </div>
+      <p class="hint">先选部件，下面会出现这个部件的背景和文字两块设置，各改各的。</p>
+      <div id="objPicker" class="obj-picker"></div>
+    </div>
+
+    <div class="card" id="bgCard">
+      <div class="card-head">
+        <h2>背景</h2>
+        <div class="btn-row tight">
+          <button id="btnPreviewBg" class="mini">显示</button>
+          <button id="btnFillBg" class="mini ghost">铺满</button>
+          <button id="btnResetBg" class="mini ghost">复位</button>
+        </div>
+      </div>
+      <label class="field">
+        <span>素材</span>
+        <select id="bgSelect"></select>
+      </label>
+      <div class="row4 nums">
+        <label class="field">x<input id="bgX" type="number" step="1"></label>
+        <label class="field">y<input id="bgY" type="number" step="1"></label>
+        <label class="field">宽<input id="bgW" type="number" step="1"></label>
+        <label class="field">高<input id="bgH" type="number" step="1"></label>
+      </div>
+      <div class="row3 scale-row" id="scaleRow">
+        <label class="field grow">缩放
+          <input id="inScale" type="range" min="10" max="300" step="1">
+        </label>
+        <label class="field">百分比<input id="inScaleNum" type="number" min="10" max="300" step="1"></label>
+        <button id="btnScaleReset" class="mini ghost">100%</button>
+      </div>
+      <p class="hint" id="bgMeta">背景的位置、大小和缩放只影响这个部件的背景。</p>
+    </div>
+
+    <div class="card" id="textCard" hidden>
+      <div class="card-head">
+        <h2>文字</h2>
+        <div class="btn-row tight">
+          <button id="btnPreviewText" class="mini">显示</button>
+          <button id="btnFillText" class="mini ghost">铺满</button>
+          <button id="btnResetText" class="mini ghost">复位</button>
+        </div>
+      </div>
+      <div class="subtab" id="textSubtabs" hidden></div>
+      <div class="row4 nums">
+        <label class="field">x<input id="txX" type="number" step="1"></label>
+        <label class="field">y<input id="txY" type="number" step="1"></label>
+        <label class="field">宽<input id="txW" type="number" step="1"></label>
+        <label class="field">高<input id="txH" type="number" step="1"></label>
+      </div>
+      <div class="typo-grid">
+        <label class="field">字体<select id="tyFont"></select></label>
+        <label class="field">字号<input id="tySize" type="number" min="12" max="400" step="1"></label>
+        <label class="field">粗细<select id="tyWeight">
+          <option value="400">常规</option>
+          <option value="600">中粗</option>
+          <option value="700">粗</option>
+          <option value="800">特粗</option>
+        </select></label>
+        <label class="field">行高<input id="tyLh" type="number" min="0.8" max="3" step="0.05"></label>
+      </div>
+      <div class="typo-grid">
+        <label class="field">对齐<select id="tyAlign">
+          <option value="left">左</option>
+          <option value="center">中</option>
+          <option value="right">右</option>
+        </select></label>
+        <label class="field color-field">
+          <span>颜色</span>
+          <span class="color-pick">
+            <input id="tyColor" type="color">
+            <code id="tyColorHex">#FFFFFF</code>
+          </span>
+        </label>
+      </div>
+
+      <div class="fx-title">阴影</div>
+      <div class="fx-grid">
+        <label class="cbx field"><input id="tyShadow" type="checkbox"> 开启</label>
+        <label class="field">模糊<input id="tyShadowBlur" type="number" min="0" max="80" step="1" value="10"></label>
+        <label class="field">横向 offset<input id="tyShadowX" type="number" min="-40" max="40" step="1" value="0"></label>
+        <label class="field">纵向 offset<input id="tyShadowY" type="number" min="-40" max="40" step="1" value="3"></label>
+        <label class="field">不透明度 %<input id="tyShadowOpacity" type="number" min="0" max="100" step="1" value="55"></label>
+        <label class="field">颜色<input id="tyShadowColor" type="color" value="#000000"></label>
+      </div>
+
+      <div class="fx-title">发光</div>
+      <div class="fx-grid">
+        <label class="cbx field"><input id="tyGlow" type="checkbox"> 开启</label>
+        <label class="field">模糊<input id="tyGlowBlur" type="number" min="0" max="120" step="1" value="24"></label>
+        <label class="field">不透明度 %<input id="tyGlowOpacity" type="number" min="0" max="100" step="1" value="35"></label>
+        <label class="field">颜色<input id="tyGlowColor" type="color" value="#ffffff"></label>
+      </div>
+      <p class="hint">文字大小用字号控制，不叠加缩放；位置和大小决定文字框在哪、能排多宽。</p>
+    </div>
+  </section>
+</main>
+
+<div id="toast" class="toast"></div>
+<script src="common.js"></script>
+<script src="edit.js"></script>
+</body>
+</html>

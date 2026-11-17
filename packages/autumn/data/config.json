@@ -1,0 +1,23 @@
+{
+  "vmix": {
+    "enabled": false,
+    "host": "127.0.0.1",
+    "port": 8088,
+    "input": "MainVisual",
+    "overlay": 1
+  },
+  "fadeIn": 320,
+  "fadeOut": 240,
+  "font": {
+    "family": "Shanggu Sans SC",
+    "weight": 700,
+    "shadow": true
+  },
+  "backgrounds": {
+    "announce": "报幕1.webm",
+    "lyric": "歌词.webm",
+    "qualify": "报幕1.webm",
+    "badge": "角标.webm",
+    "credits": ""
+  }
+}

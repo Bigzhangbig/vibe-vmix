@@ -1,0 +1,232 @@
+/* 深秋歌会 · 上屏渲染器样式 */
+
+/* 工作区自带的尚古黑体（2026深秋包装\尚古黑体） */
+@font-face {
+  font-family: "Shanggu Sans SC";
+  src: url("/fonts/ShangguSansSC-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-display: swap;
+}@font-face {
+  font-family: "Shanggu Sans SC";
+  src: url("/fonts/ShangguSansSC-Medium.ttf") format("truetype");
+  font-weight: 500;
+  font-display: swap;
+}@font-face {
+  font-family: "Shanggu Sans SC";
+  src: url("/fonts/ShangguSansSC-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-display: swap;
+}@font-face {
+  font-family: "Shanggu Sans SC";
+  src: url("/fonts/ShangguSansSC-Heavy.ttf") format("truetype");
+  font-weight: 900;
+  font-display: swap;
+}:root {
+  --in-ms: 320ms;
+  --out-ms: 240ms;
+  --stage-font: "Shanggu Sans SC", "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif;
+}html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent !important;
+  font-family: var(--stage-font);
+  -webkit-font-smoothing: antialiased;
+}#stage {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 1920px;
+  height: 1080px;
+  transform-origin: top left;
+  overflow: hidden;
+  background: transparent;
+}/* 所有可定位元素：位置、尺寸、显隐都由 layout 与通道状态决定 */
+.el {
+  position: absolute;
+  box-sizing: border-box;
+  transform-origin: center center;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity var(--out-ms) ease,
+    visibility 0s linear var(--out-ms);
+  will-change: opacity;
+}.el.on {
+  opacity: 1;
+  visibility: visible;
+  transition:
+    opacity var(--in-ms) ease,
+    visibility 0s linear 0s;
+}video.el {
+  object-fit: fill;
+  background: transparent;
+  pointer-events: none;
+}/* ---------- 文字容器 ---------- */
+
+.text-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: visible;
+}.text-inner {
+  width: auto;
+  max-width: 100%;
+  font-family: var(--stage-font);
+  line-height: 1.2;
+  text-align: center;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #ffffff;
+  font-weight: 700;
+  letter-spacing: .04em;
+}.text-inner.shadow {
+  text-shadow:
+    0 2px 10px rgba(0, 0, 0, .55),
+    0 0 2px rgba(0, 0, 0, .65);
+}/* ---------- 歌词 ---------- */
+
+.lyric-box .text-inner {
+  font-weight: 600;
+}.lyric-char {
+  display: inline-block;
+  /* 基础态必须是“可见”：进场靠 charIn 的 from 帧完成，
+     否则 .out 覆盖 animation 时 charIn 的 forwards 填充失效，
+     字符会瞬间跳回 opacity:0，看起来就是“没有淡出”。 */
+  opacity: 1;
+  transform: translateY(0);
+  animation: charIn .5s cubic-bezier(.22, 1, .36, 1) both;
+  animation-delay: calc(var(--i) * 40ms);
+}@keyframes charIn {
+  from {
+    opacity: 0;
+    transform: translateY(.34em);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}/* 换句时旧句先退场，新句再逐字进。
+   退场不再逐字延迟：整句同时淡出，300ms 后一定换完，
+   否则长句最后一字会拖到 400ms 以后，看起来像硬切。 */
+.lyric-char.out {
+  animation: charOut .26s ease forwards;
+  animation-delay: 0ms;
+}@keyframes charOut {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-.22em);
+  }
+}/* ---------- 晋级 ---------- */
+
+
+.qualify-box {
+  align-items: flex-start;
+}.qualify-title-box .text-inner {
+  letter-spacing: .22em;
+  color: #8fd0ff;
+}/* 兼容旧结构：标题已拆成独立元素，这条只在旧缓存里还会命中 */
+.qualify-title {
+  font-size: 40px;
+  font-weight: 700;
+  letter-spacing: .3em;
+  color: #8fd0ff;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, .5);
+}/* ---------- 结尾滚动 ---------- */
+
+.credits-box {
+  display: block;
+  overflow: hidden;
+  mask-image: linear-gradient(to bottom, transparent 0, #000 8%, #000 92%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 8%, #000 92%, transparent 100%);
+}.credits-scroll {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  text-align: center;
+  color: #ffffff;
+  font-size: 34px;
+  line-height: 1.9;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, .6);
+  will-change: transform;
+}.credits-scroll .role {
+  margin-top: 26px;
+  font-size: 26px;
+  letter-spacing: .35em;
+  color: #8fd0ff;
+}.credits-scroll .name {
+  font-size: 38px;
+  font-weight: 600;
+}/* ---------- 角标 ---------- */
+
+#el-badge.on {
+  opacity: .96;
+}/* ---------- 连接提示 ---------- */
+
+.conn {
+  position: fixed;
+  right: 16px;
+  bottom: 12px;
+  z-index: 999;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #fff;
+  background: rgba(0, 0, 0, .45);
+  opacity: 0;
+  transition: opacity .2s;
+}.conn.show {
+  opacity: 1;
+}body.clean .conn {
+  display: none;
+}/* ---------- 编辑模式 ---------- */
+
+body.edit-mode {
+  user-select: none;
+  -webkit-user-select: none;
+}body.edit-mode .el {
+  opacity: 0;
+  visibility: hidden;
+  transition: none;
+  outline: 2px dashed rgba(255, 214, 64, .95);
+  outline-offset: -2px;
+  cursor: move;
+  pointer-events: none;
+  touch-action: none;
+  user-select: none;
+}/* 编辑模式只显示当前正在编辑的对象 */
+body.edit-mode .el.solo {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}body.edit-mode .el.solo.selected {
+  outline: 3px solid #ffd640;
+}/* 文字永远压在背景视频之上，选中背景也不会把文字盖住 */
+.el.text-box, .el.credits-box { z-index: 2; }video.el { z-index: 1; }.edit-hud {
+  position: fixed;
+  left: 12px;
+  bottom: 12px;
+  z-index: 1000;
+  display: none;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font: 500 15px/1.5 "Microsoft YaHei", sans-serif;
+  color: #111;
+  background: rgba(255, 214, 64, .95);
+}body.edit-mode .edit-hud {
+  display: block;
+}/* 预监「显示」：临时点亮某个元素，不参与正式上屏 */
+.el.preview-on {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity .12s ease;
+  outline: 2px dashed rgba(76, 141, 255, .9);
+  outline-offset: 2px;
+}
