@@ -14,13 +14,20 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { randomUUID } = require('node:crypto');
+const {
+  FONT_FAMILY,
+  LAYOUT_VERSION,
+  DEFAULT_LAYOUT,
+  TEXT_IDS,
+  ANNOUNCE_PRESETS,
+  migrateLayout,
+} = require('./concert-layout');
 
 function createConcertServer({ dataDirectory, project = path.resolve(__dirname, '..') }) {
   const DATA_DIR = path.resolve(dataDirectory);
   const PUBLIC_DIR = path.join(project, 'ui/concert');
   const ASSET_DIRS = [path.join(project, 'packages/autumn/assets')];
   const FONT_DIRS = [path.join(project, 'packages/autumn/assets/fonts')];
-  const FONT_FAMILY = 'Shanggu Sans SC';
   const FONT_RE_ALLOWED = /^ShangguSansSC-[A-Za-z]+\.ttf$/;
   const HOST = '127.0.0.1';
   fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -42,49 +49,6 @@ function createConcertServer({ dataDirectory, project = path.resolve(__dirname, 
   // 互斥通道：同一时刻只允许一个开着
   const EXCLUSIVE = ['announce', 'lyric', 'qualify', 'credits'];
   // 角标与主视觉不参与互斥，各自独立开关
-
-  // 文字元素的默认排版（每个元素都可以在监视页单独覆盖）
-  const TEXT_DEFAULT = {
-    font: FONT_FAMILY,
-    size: 64,
-    weight: 700,
-    lh: 1.2,
-    color: '#ffffff',
-    align: 'center',
-    // 阴影：偏移 + 模糊 + 颜色 + 透明度
-    shadow: true,
-    shadowX: 0,
-    shadowY: 3,
-    shadowBlur: 10,
-    shadowColor: '#000000',
-    shadowOpacity: 55,
-    // 发光：模糊 + 颜色 + 透明度
-    glow: false,
-    glowBlur: 24,
-    glowColor: '#ffffff',
-    glowOpacity: 35,
-  };
-
-  // 默认位置按背景素材的实际内容区校准：
-  //   报幕卡在画面左下（约 320,635 - 890,930），歌词圆球在中上（约 800,250 - 1140,610）
-  function textRect(x, y, w, h, size, extra) {
-    return Object.assign({ x, y, w, h }, TEXT_DEFAULT, { size }, extra || {});
-  }
-
-  const DEFAULT_LAYOUT = {
-    announceBg: { x: 0, y: 0, w: 1920, h: 1080 },
-    announceText: textRect(330, 650, 550, 270, 52),
-    lyricBg: { x: 0, y: 0, w: 1920, h: 1080 },
-    lyricText: textRect(510, 700, 900, 210, 60),
-    qualifyBg: { x: 1010, y: 250, w: 760, h: 420 },
-    qualifyTitle: textRect(1020, 262, 740, 72, 38),
-    qualifyText: textRect(1020, 344, 740, 300, 48),
-    creditsBg: { x: 0, y: 0, w: 1920, h: 1080 },
-    creditsText: textRect(560, 90, 800, 900, 34, { lh: 1.9, font: FONT_FAMILY }),
-    badge: { x: 0, y: 0, w: 1920, h: 1080 },
-  };
-
-  const TEXT_IDS = Object.keys(DEFAULT_LAYOUT).filter((id) => DEFAULT_LAYOUT[id].size != null);
 
   const DEFAULT_FONT = {
     family: FONT_FAMILY,
@@ -263,56 +227,7 @@ function createConcertServer({ dataDirectory, project = path.resolve(__dirname, 
     songsDoc.currentId = songsDoc.songs.length ? songsDoc.songs[0].id : null;
 
   let state = readJson(path.join(DATA_DIR, 'state.json'), structuredClone(DEFAULT_STATE));
-  let layoutCleaned = false;
-  // 晋级文字拆成“标题 / 内容”之前，旧数据里只有一个 qualifyText
-  const hadQualifyTitle = !!(state.layout && state.layout.qualifyTitle);
-  const legacyQualify =
-    state.layout && state.layout.qualifyText ? { ...state.layout.qualifyText } : null;
-  // 布局升级：旧版本没有字号/字体字段，且默认坐标未对齐素材，升级时重置一次
-  const LAYOUT_VERSION = 3;
-  if (!state.layout || state.layoutVersion !== LAYOUT_VERSION) {
-    state.layout = JSON.parse(JSON.stringify(DEFAULT_LAYOUT));
-    state.layoutVersion = LAYOUT_VERSION;
-  }
-  // 兼容旧文件：补齐缺失字段
-  for (const key of Object.keys(DEFAULT_LAYOUT)) {
-    state.layout[key] = { ...DEFAULT_LAYOUT[key], ...(state.layout[key] || {}) };
-  }
-  // 晋级：旧数据没有标题元素时补一个。没动过位置的用新默认，
-  // 动过的把标题放到原内容上方，避免两块文字叠在一起。
-  if (!hadQualifyTitle && legacyQualify) {
-    const untouched =
-      legacyQualify.x === 1020 &&
-      legacyQualify.y === 268 &&
-      legacyQualify.w === 740 &&
-      legacyQualify.h === 384;
-    if (untouched) {
-      state.layout.qualifyText = { ...state.layout.qualifyText, y: 344, h: 300, size: 48 };
-    } else {
-      state.layout.qualifyTitle = {
-        ...state.layout.qualifyTitle,
-        x: legacyQualify.x,
-        w: legacyQualify.w,
-        y: Math.max(0, legacyQualify.y - 82),
-      };
-    }
-    layoutCleaned = true;
-  }
-  // 缩放只属于背景：清掉文字元素上残留的旧 scale
-  for (const key of TEXT_IDS) {
-    if (state.layout[key] && state.layout[key].scale != null) {
-      delete state.layout[key].scale;
-      layoutCleaned = true;
-    }
-  }
-  // 网页统一用工作区自带的尚古黑体：换掉旧数据里的雅黑
-  for (const key of TEXT_IDS) {
-    const item = state.layout[key];
-    if (item && (!item.font || item.font === 'Microsoft YaHei')) {
-      item.font = FONT_FAMILY;
-      layoutCleaned = true;
-    }
-  }
+  const layoutCleaned = migrateLayout(state);
   if (!state.channels) state.channels = { ...DEFAULT_STATE.channels };
   for (const key of Object.keys(DEFAULT_STATE.channels)) {
     if (!state.channels[key]) state.channels[key] = { ...DEFAULT_STATE.channels[key] };
@@ -365,6 +280,7 @@ function createConcertServer({ dataDirectory, project = path.resolve(__dirname, 
       startedAt: STARTED_AT,
       clients: clients.size,
       layout: state.layout,
+      announcePlacement: state.announcePlacement,
       channels: state.channels,
       lyrics,
       credits: creditsDoc,
@@ -979,8 +895,49 @@ function createConcertServer({ dataDirectory, project = path.resolve(__dirname, 
             applied.push(item.id);
           }
           markDirty();
-          broadcast({ type: 'layout', tick: nextTick(), layout: state.layout });
-          return sendJson(res, 200, { ok: true, applied, layout: state.layout });
+          broadcast({
+            type: 'layout',
+            tick: nextTick(),
+            layout: state.layout,
+            announcePlacement: state.announcePlacement,
+          });
+          return sendJson(res, 200, {
+            ok: true,
+            applied,
+            layout: state.layout,
+            announcePlacement: state.announcePlacement,
+          });
+        } catch (err) {
+          return sendJson(res, 400, { error: err.message });
+        }
+      }
+
+      if (pathname === '/api/layout/preset') {
+        try {
+          const body = await readBody(req);
+          if (
+            typeof body.placement !== 'string' ||
+            !Object.hasOwn(ANNOUNCE_PRESETS, body.placement)
+          ) {
+            return sendJson(res, 400, { error: '未知报幕位置' });
+          }
+          for (const [id, preset] of Object.entries(ANNOUNCE_PRESETS[body.placement])) {
+            state.layout[id] = { ...state.layout[id], ...preset };
+            delete state.layout[id].scale;
+          }
+          state.announcePlacement = body.placement;
+          markDirty();
+          broadcast({
+            type: 'layout',
+            tick: nextTick(),
+            layout: state.layout,
+            announcePlacement: state.announcePlacement,
+          });
+          return sendJson(res, 200, {
+            ok: true,
+            layout: state.layout,
+            announcePlacement: state.announcePlacement,
+          });
         } catch (err) {
           return sendJson(res, 400, { error: err.message });
         }
@@ -988,9 +945,20 @@ function createConcertServer({ dataDirectory, project = path.resolve(__dirname, 
 
       if (pathname === '/api/layout/reset') {
         state.layout = JSON.parse(JSON.stringify(DEFAULT_LAYOUT));
+        state.layoutVersion = LAYOUT_VERSION;
+        state.announcePlacement = 'lower-left';
         markDirty();
-        broadcast({ type: 'layout', tick: nextTick(), layout: state.layout });
-        return sendJson(res, 200, { ok: true, layout: state.layout });
+        broadcast({
+          type: 'layout',
+          tick: nextTick(),
+          layout: state.layout,
+          announcePlacement: state.announcePlacement,
+        });
+        return sendJson(res, 200, {
+          ok: true,
+          layout: state.layout,
+          announcePlacement: state.announcePlacement,
+        });
       }
 
       if (pathname === '/api/preview') {
@@ -1190,6 +1158,11 @@ function createConcertServer({ dataDirectory, project = path.resolve(__dirname, 
         next.glowOpacity = clampNum(body.glowOpacity, current.glowOpacity, 0, 100);
     }
     state.layout[id] = next;
+    if (
+      ['announceBg', 'announceText'].includes(id) &&
+      ['x', 'y', 'w', 'h', 'size', 'scale'].some((key) => Object.hasOwn(body, key))
+    )
+      state.announcePlacement = 'custom';
     return { id };
   }
 

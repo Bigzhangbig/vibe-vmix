@@ -147,6 +147,7 @@
 
   function render() {
     if (!state) return;
+    $('#announcePlacement').value = state.announcePlacement || 'lower-left';
     songs = (state.songs && state.songs.songs) || [];
     lyrics = state.lyrics || [];
     renderSongs();
@@ -224,7 +225,7 @@
       if (msg.type === 'snapshot' && msg.state) {
         state = msg.state;
         render();
-      } else if (msg.type === 'cue') {
+      } else if (msg.type === 'cue' || msg.type === 'layout') {
         api('/api/state').then((s) => { state = s; render(); }).catch(() => {});
       }
     };
@@ -232,6 +233,19 @@
 
 
   function bind() {
+    $('#announcePlacement').addEventListener('change', async (event) => {
+      const select = event.target;
+      select.disabled = true;
+      try {
+        await api('/api/layout/preset', { placement: select.value });
+        state = await api('/api/state');
+        render();
+        toast('报幕位置已保存');
+      } catch (error) {
+        toast('切换位置失败：' + error.message, true);
+        render();
+      } finally { select.disabled = false; }
+    });
     $('#songSelect').addEventListener('change', (e) => selectSong(e.target.value));
 
     $('#btn-announce').addEventListener('click', () => {

@@ -36,6 +36,16 @@
       </header>
 
       <div class="field">
+        <span>报幕位置</span>
+        <select id="announcePlacement" aria-label="报幕位置">
+          <option value="lower-left">左下角 · 叠加在主画面上</option>
+          <option value="center">居中 · 突出当前节目</option>
+          <option value="custom" disabled>自定义位置（在编辑页调整）</option>
+        </select>
+        <div class="hint">切换后立即保存位置，下次打开继续使用。</div>
+      </div>
+
+      <div class="field">
         <span>当前节目</span>
         <select id="songSelect"></select>
         <div class="hint" id="songMeta">—</div>
