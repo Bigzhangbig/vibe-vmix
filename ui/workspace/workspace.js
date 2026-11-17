@@ -1,7 +1,18 @@
 'use strict';
 const byId = (id) => document.getElementById(id);
 let model, active;
+function available(module) {
+  if (!module || typeof module !== 'object' || !module.enabled || !module.id || !module.name)
+    return false;
+  try {
+    const url = new URL(module.url);
+    return ['http:', 'https:'].includes(url.protocol) && url.origin === module.url;
+  } catch (_) {
+    return false;
+  }
+}
 function output(module) {
+  if (!available(module)) return '';
   return (
     module.url +
     (module.outputPath ||
@@ -29,6 +40,10 @@ async function request(payload) {
 }
 function manage() {
   active = null;
+  byId('openPreview').disabled = true;
+  byId('copyAddress').disabled = true;
+  byId('moduleName').textContent = '';
+  byId('moduleAddress').textContent = '';
   byId('moduleFrame').src = 'about:blank';
   byId('moduleView').hidden = true;
   byId('modules').hidden = false;
@@ -36,8 +51,11 @@ function manage() {
     .querySelectorAll('#navigation button')
     .forEach((button) => button.setAttribute('aria-current', 'false'));
 }
-function open(module) {
+function openModule(module) {
+  if (!available(module)) return;
   active = module;
+  byId('openPreview').disabled = false;
+  byId('copyAddress').disabled = false;
   byId('modules').hidden = true;
   byId('moduleView').hidden = false;
   byId('moduleName').textContent = module.name;
@@ -89,10 +107,13 @@ function render() {
       const button = document.createElement('button');
       button.textContent = module.name;
       button.dataset.id = module.id;
-      button.onclick = () => open(module);
+      button.onclick = () => openModule(module);
       byId('navigation').append(button);
     }
   }
+  const current = model.modules.find((module) => module.id === active?.id);
+  if (available(current)) openModule(current);
+  else manage();
 }
 byId('moduleForm').onsubmit = async (event) => {
   event.preventDefault();
@@ -116,13 +137,15 @@ byId('moduleForm').onsubmit = async (event) => {
 };
 byId('manage').onclick = manage;
 function openPreview(id) {
-  if (active?.editorPath && (!id || id === active.id)) {
-    window.open(active.url + active.editorPath, '_blank');
+  const module = model?.modules.find((module) => module.id === (id || active?.id));
+  if (!available(module)) return;
+  if (module.editorPath) {
+    window.open(module.url + module.editorPath, '_blank');
     return;
   }
-  const module = id || active?.id || 'all';
-  if (window.chrome?.webview) window.chrome.webview.postMessage({ type: 'open-preview', module });
-  else window.open('/workspace/preview.html?module=' + encodeURIComponent(module), '_blank');
+  if (window.chrome?.webview)
+    window.chrome.webview.postMessage({ type: 'open-preview', module: module.id });
+  else window.open('/workspace/preview.html?module=' + encodeURIComponent(module.id), '_blank');
 }
 byId('openPreview').onclick = () => openPreview();
 document.querySelector('.brand').onclick = (event) => {
@@ -130,6 +153,7 @@ document.querySelector('.brand').onclick = (event) => {
   manage();
 };
 byId('copyAddress').onclick = async () => {
+  if (!available(active)) return;
   try {
     await navigator.clipboard.writeText(output(active));
     byId('copyAddress').textContent = '已复制';
@@ -155,6 +179,7 @@ window.addEventListener('native-source', (event) => {
       active.url,
     );
 });
+manage();
 request()
   .then((body) => {
     model = body;

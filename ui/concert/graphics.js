@@ -13,6 +13,7 @@
   const CLEAN = params.get('clean') === '1';
   const PREVIEW = params.get('preview') === '1';
   const OBSERVER = PREVIEW || params.get('observer') === '1';
+  if (PREVIEW) document.documentElement.classList.add('layout-editor');
 
   const stage = document.getElementById('stage');
   const hud = document.getElementById('editHud');

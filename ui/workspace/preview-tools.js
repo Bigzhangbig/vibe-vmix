@@ -1,5 +1,5 @@
 'use strict';
-// These are monitor preferences. Only preview.js can apply a layout to output.
+// Editor preferences stay local. Only preview.js applies saved layout changes.
 (() => {
   const storageKey = 'broadcast-preview-tools-v1';
   const defaults = {
@@ -17,7 +17,7 @@
   let prefs = { ...defaults },
     dragging = false,
     only = '',
-    mode = 'live';
+    mode = 'layout';
   try {
     const value = JSON.parse(localStorage.getItem(storageKey) || '{}');
     prefs = {
@@ -126,7 +126,7 @@
     const grid = root.querySelector('.preview-grid');
     grid.hidden = !prefs.grid && !dragging;
     grid.style.backgroundSize = prefs.step + 'px ' + prefs.step + 'px';
-    for (const wrap of [$('pvwWrap'), $('pgmWrap')]) wrap.dataset.background = prefs.background;
+    $('pvwWrap').dataset.background = prefs.background;
   }
   function choose(value, solo = false) {
     selected = value;
@@ -134,7 +134,6 @@
     if (solo || only) {
       only = value;
       mode = 'layout';
-      $('previewMode').value = mode;
       broadcast();
     }
     fillControls();
@@ -150,10 +149,7 @@
       .forEach((node) =>
         node.setAttribute('aria-pressed', String(node.dataset.element === selected)),
       );
-    $('modeHint').textContent =
-      mode === 'layout'
-        ? '排版预览：含未上屏元素，缺失内容以示例显示 · PGM 不受影响'
-        : 'PVW 跟随播出 · 栏目开关仅作用于预览';
+    $('modeHint').textContent = '拖动选框调整位置，确认后应用布局';
   }
   function render() {
     const items = entries();
@@ -166,7 +162,6 @@
     all.onclick = () => {
       only = '';
       mode = 'layout';
-      $('previewMode').value = mode;
       broadcast();
       renderSelection();
       drawHandle();
@@ -174,7 +169,7 @@
     $('categoryTabs').append(all);
     for (const item of items) {
       const button = document.createElement('button');
-      button.textContent = tab === 'all' ? item.name + ' · ' + item.label : item.label;
+      button.textContent = item.label;
       button.dataset.element = item.value;
       button.onclick = () => choose(item.value, true);
       $('categoryTabs').append(button);
@@ -208,7 +203,7 @@
   }
   function sync() {
     const item = currentElement(),
-      enabled = Boolean(item && base[item.id]) && view !== 'pgm' && !busy;
+      enabled = Boolean(item && base[item.id]) && !busy;
     $('anchorHint').textContent =
       item?.id === 'football' ? 'X / Y · 元素中心坐标' : 'X / Y · 左上角坐标';
     $('restoreElement').disabled = !enabled;
@@ -232,13 +227,6 @@
       y: rect.y + Math.round((point.y - rect.y) / prefs.step) * prefs.step,
     };
   }
-  $('previewMode').onchange = () => {
-    mode = $('previewMode').value;
-    only = '';
-    broadcast();
-    renderSelection();
-    drawHandle();
-  };
   $('sizeSlider').oninput = () => {
     $('size').value = $('sizeSlider').value;
     $('size').dispatchEvent(new Event('change'));

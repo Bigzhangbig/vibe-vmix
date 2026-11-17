@@ -42,13 +42,13 @@ async function main() {
       { width: 1440, height: 960, deviceScaleFactor: 1, mobile: false },
       page,
     );
-    await cdp.until(page, "document.querySelectorAll('.module-option').length===3");
+    await cdp.until(page, "document.querySelectorAll('.module-option').length===4");
     assert.deepEqual(
       await cdp.eval(
         page,
         "[...document.querySelectorAll('input[name=module]')].map(input=>input.checked)",
       ),
-      [false, false, false],
+      [false, false, false, false],
     );
     const screenshots = path.resolve(__dirname, '../docs/screenshots');
     if (process.argv.includes('--screenshots')) fs.mkdirSync(screenshots, { recursive: true });
@@ -154,6 +154,14 @@ async function main() {
     }).then((response) => response.json());
     const aeOrigin = enabled.modules.find((item) => item.id === 'ae-live').url;
     const footballOrigin = enabled.modules.find((item) => item.id === 'football').url;
+    // Independent output pages exercise the same URLs consumed by vMix.
+    const outputPages = new Map();
+    for (const url of [
+      stageOrigin + '/stage/graphics.html',
+      footballOrigin + '/titles/graphics.html',
+      aeOrigin + '/ae/graphics.html',
+    ])
+      outputPages.set(url, await cdp.page(url));
     const preview = await cdp.page(origin + '/workspace/preview.html?module=stage');
     await cdp.send(
       'Emulation.setDeviceMetricsOverride',
@@ -162,9 +170,33 @@ async function main() {
     );
     await cdp.until(
       preview,
-      "document.querySelectorAll('#tabs button').length===4 && document.querySelectorAll('.canvas iframe').length===2",
+      "document.querySelectorAll('#tabs button').length===3 && document.querySelectorAll('.canvas iframe').length===1",
     );
     async function frameValue(query, expression, exact = false) {
+      if (exact) {
+        assert(outputPages.has(query), 'independent output page ' + query);
+        const outputPage = outputPages.get(query);
+        const ae = query === aeOrigin + '/ae/graphics.html';
+        const stageOutput = query === stageOrigin + '/stage/graphics.html';
+        const stateRoute = ae ? '/api/ae/output' : '/api/v1/state';
+        const response = await fetch(new URL(stateRoute, query));
+        assert.equal(response.status, 200);
+        const snapshot = await response.json();
+        const rendererState = ae ? 'liveLayout' : stageOutput ? 'latestState' : 'S';
+        const expected = JSON.stringify(ae ? snapshot.layout : snapshot);
+        await cdp.send('Page.bringToFront', {}, outputPage);
+        try {
+          await cdp.until(outputPage, "document.visibilityState === 'visible'");
+          await cdp.until(
+            outputPage,
+            `JSON.stringify(${rendererState}) === ${JSON.stringify(expected)}`,
+          );
+          return await cdp.eval(outputPage, expression);
+        } finally {
+          await cdp.send('Page.bringToFront', {}, preview);
+          await cdp.until(preview, "document.visibilityState === 'visible'");
+        }
+      }
       const tree = await cdp.send('Page.getFrameTree', {}, preview);
       const frames = [];
       function collect(node) {
@@ -247,6 +279,14 @@ async function main() {
         .captionX,
       moved,
     );
+    assert.equal(
+      await frameValue(
+        stageOrigin + '/stage/graphics.html',
+        "document.getElementById('caption').style.left",
+        true,
+      ),
+      moved + 'px',
+    );
     await fetch(stageOrigin + '/api/v1/state', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -314,7 +354,7 @@ async function main() {
     );
     await cdp.eval(
       preview,
-      "document.getElementById('showAllLayers').click();document.getElementById('compositionRatio').value='16:9';document.getElementById('compositionRatio').dispatchEvent(new Event('change'));document.getElementById('showGrid').click();document.getElementById('previewBackground').value='checker';document.getElementById('previewBackground').dispatchEvent(new Event('change'));document.getElementById('previewMode').value='live';document.getElementById('previewMode').dispatchEvent(new Event('change'))",
+      "document.getElementById('showAllLayers').click();document.getElementById('compositionRatio').value='16:9';document.getElementById('compositionRatio').dispatchEvent(new Event('change'));document.getElementById('showGrid').click();document.getElementById('previewBackground').value='checker';document.getElementById('previewBackground').dispatchEvent(new Event('change'))",
     );
     await cdp.eval(preview, "document.querySelector('[data-tab=football]').click()");
     await cdp.until(preview, "document.getElementById('element').value==='football:sb'");
@@ -352,6 +392,14 @@ async function main() {
       (await fetch(footballOrigin + '/api/v1/state').then((response) => response.json())).sb_pos.x,
       701,
     );
+    assert.equal(
+      await frameValue(
+        footballOrigin + '/titles/graphics.html',
+        "document.getElementById('sb').style.left",
+        true,
+      ),
+      '701px',
+    );
     const untouchedFootball = await fetch(footballOrigin + '/api/v1/state').then((response) =>
       response.json(),
     );
@@ -388,10 +436,7 @@ async function main() {
         )
       ).includes('1.5'),
     );
-    await cdp.eval(
-      preview,
-      "document.getElementById('restoreElement').click();document.getElementById('previewMode').value='live';document.getElementById('previewMode').dispatchEvent(new Event('change'))",
-    );
+    await cdp.eval(preview, "document.getElementById('restoreElement').click()");
     assert.deepEqual(
       await fetch(footballOrigin + '/api/v1/state').then((response) => response.json()),
       untouchedFootball,
@@ -434,10 +479,6 @@ async function main() {
       preview,
       "document.getElementById('notice').textContent==='已恢复当前播出位置。'",
     );
-    await cdp.eval(
-      preview,
-      "document.getElementById('previewMode').value='live';document.getElementById('previewMode').dispatchEvent(new Event('change'))",
-    );
     const initialWidth = await cdp.eval(preview, "document.getElementById('pvwWrap').clientWidth");
     await cdp.eval(preview, "document.getElementById('inspectorToggle').click()");
     await delay(100);
@@ -445,22 +486,23 @@ async function main() {
       (await cdp.eval(preview, "document.getElementById('pvwWrap').clientWidth")) > initialWidth,
     );
     await cdp.eval(preview, "document.getElementById('inspectorToggle').click()");
+    for (const id of ['stage', 'football', 'ae-live']) {
+      await cdp.eval(preview, `document.querySelector('[data-tab=${id}]').click()`);
+      assert.equal(
+        await cdp.eval(preview, "document.querySelectorAll('.canvas iframe').length"),
+        1,
+      );
+      assert.equal(
+        await cdp.eval(
+          preview,
+          "document.querySelector('#pgmPanel, [data-view], #previewMode, [data-tab=all]') === null",
+        ),
+        true,
+      );
+    }
     await cdp.eval(
       preview,
-      "document.querySelector('[data-tab=all]').click();document.querySelector('[data-view=pvw]').click()",
-    );
-    assert.equal(await cdp.eval(preview, "document.querySelectorAll('.canvas iframe').length"), 3);
-    await cdp.eval(preview, "document.querySelector('[data-view=pgm]').click()");
-    assert.equal(
-      await cdp.eval(
-        preview,
-        "document.getElementById('pvwPanel').hidden && !document.getElementById('pgmPanel').hidden",
-      ),
-      true,
-    );
-    await cdp.eval(
-      preview,
-      "document.querySelector('[data-view=dual]').click();document.querySelector('[data-tab=ae-live]').click();document.getElementById('x').value='125';document.getElementById('x').dispatchEvent(new Event('change'))",
+      "document.getElementById('x').value='125';document.getElementById('x').dispatchEvent(new Event('change'))",
     );
     await delay(400);
     assert.equal(
@@ -493,8 +535,17 @@ async function main() {
       (await fetch(aeOrigin + '/api/ae/output').then((response) => response.json())).layout.x,
       125,
     );
-    // A dark page must still composite transparent cross-origin module frames.
-    await cdp.eval(preview, "document.querySelector('[data-tab=all]').click()");
+    assert(
+      (
+        await frameValue(
+          aeOrigin + '/ae/graphics.html',
+          "document.getElementById('frame').style.transform",
+          true,
+        )
+      ).includes('125px'),
+    );
+    // The single layout canvas retains a transparent module background.
+    await cdp.eval(preview, "document.querySelector('[data-tab=ae-live]').click()");
     await delay(1500);
     const captured = await cdp.send(
       'Page.captureScreenshot',
@@ -507,11 +558,11 @@ async function main() {
     );
     assert(
       pixel.slice(0, 3).every((value) => value < 100),
-      'combined preview retains transparent module backgrounds',
+      'single layout canvas retains the transparent module background',
     );
     await cdp.eval(
       preview,
-      "document.querySelector('[data-tab=football]').click();document.querySelector('[data-view=pvw]').click();document.querySelector('#categoryTabs [data-element=\"football:lineup_all\"]').click()",
+      "document.querySelector('[data-tab=football]').click();document.querySelector('#categoryTabs [data-element=\"football:lineup_all\"]').click()",
     );
     await delay(500);
     assert.equal(
@@ -534,7 +585,6 @@ async function main() {
       { width: 920, height: 780, deviceScaleFactor: 1, mobile: false },
       preview,
     );
-    await cdp.eval(preview, "document.querySelector('[data-view=dual]').click()");
     await delay(250);
     assert.equal(await cdp.eval(preview, 'document.documentElement.scrollWidth>innerWidth'), false);
     if (process.argv.includes('--inspect-preview')) {
@@ -585,7 +635,7 @@ async function main() {
     const errors = cdp.events.filter((event) => event.method === 'Runtime.exceptionThrown');
     assert.deepEqual(errors, []);
     console.log(
-      'PASS lyrics cues, module previews, PVW drag and explicit PGM apply, view modes and module controls',
+      'PASS lyrics cues, single-module layout editing, draft/output isolation, drag, apply and module controls',
     );
   } finally {
     if (cdp) {

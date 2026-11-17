@@ -89,7 +89,7 @@ async function main() {
     });
     await cdp.send('Runtime.enable', {}, sessionId);
     await cdp.send('Page.enable', {}, sessionId);
-    await cdp.until(sessionId, "document.querySelectorAll('.module-option').length===3");
+    await cdp.until(sessionId, "document.querySelectorAll('.module-option').length===4");
     assert.equal(
       await cdp.eval(
         sessionId,

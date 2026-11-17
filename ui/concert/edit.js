@@ -408,9 +408,6 @@
         render();
       }
     });
-    $('#btnClean').addEventListener('click', () => {
-      window.open('/graphics.html?clean=1', 'gala-graphics', 'width=1280,height=720');
-    });
     frame.addEventListener('load', () => {
       if (editing) setTimeout(showCurrent, 250);
     });

@@ -1,4 +1,7 @@
 /* 深秋歌会 · 上屏渲染器样式 */
+html.layout-editor {
+  background: repeating-conic-gradient(#2a323d 0 25%, #1b2029 0 50%) 0 0 / 24px 24px !important;
+}
 
 /* 工作区自带的尚古黑体（2026深秋包装\尚古黑体） */
 @font-face {

@@ -34,11 +34,10 @@ const base = {},
   draft = {},
   boxes = {};
 let modules = [],
-  tab = new URLSearchParams(location.search).get('module') || 'all';
-let view = 'dual',
-  selected = '',
+  tab = new URLSearchParams(location.search).get('module') || '';
+let selected = '',
   busy = false,
-  scales = { pvw: 1, pgm: 1 },
+  scales = { pvw: 1 },
   timer;
 
 async function api(url, data) {
@@ -63,7 +62,7 @@ function anyDirty() {
   return Object.keys(draft).some(dirty);
 }
 function activeModules() {
-  return tab === 'all' ? modules : modules.filter((item) => item.id === tab);
+  return modules.filter((item) => item.id === tab);
 }
 function layoutValue(id, key) {
   return Object.hasOwn(draft[id] || {}, key) ? draft[id][key] : base[id]?.[key];
@@ -147,7 +146,7 @@ function limits(element) {
 }
 function fillControls() {
   const element = currentElement(),
-    enabled = Boolean(element && base[element.id]) && view !== 'pgm' && !busy;
+    enabled = Boolean(element && base[element.id]) && !busy;
   for (const id of ['x', 'y', 'size']) $(id).disabled = !enabled;
   $('element').disabled = !element || busy;
   if (!element || !base[element.id]) {
@@ -198,7 +197,7 @@ function drawHandle() {
   const restoreFocus = host.contains(document.activeElement);
   host.replaceChildren();
   const element = currentElement();
-  if (!element || !base[element.id] || view === 'pgm' || busy) return;
+  if (!element || !base[element.id] || busy) return;
   const point = coordinate(element),
     box = boxes[element.id]?.[element.key];
   const width = Math.max(
@@ -299,22 +298,24 @@ function drawHandle() {
   if (restoreFocus) handle.focus({ preventScroll: true });
 }
 function resize() {
-  for (const kind of ['pvw', 'pgm']) {
-    const width = $(kind + 'Wrap').clientWidth;
-    if (!width) continue;
-    scales[kind] = width / 1920;
-    $(kind + 'Canvas').style.transform = 'scale(' + scales[kind] + ')';
-  }
+  const width = $('pvwWrap').clientWidth;
+  if (!width) return;
+  scales.pvw = width / 1920;
+  $('pvwCanvas').style.transform = 'scale(' + scales.pvw + ')';
 }
 new ResizeObserver(resize).observe($('screens'));
 function renderTabs() {
   $('tabs').replaceChildren();
-  for (const item of [{ id: 'all', name: '全部模块' }, ...modules]) {
+  for (const item of modules) {
     const button = document.createElement('button');
     button.textContent = item.name;
     button.dataset.tab = item.id;
     button.setAttribute('aria-pressed', String(item.id === tab));
     button.onclick = () => {
+      if (item.editorPath) {
+        window.open(item.url + item.editorPath, '_blank');
+        return;
+      }
       tab = item.id;
       selected = '';
       renderTabs();
@@ -323,41 +324,28 @@ function renderTabs() {
     $('tabs').append(button);
   }
 }
-function outputUrl(module, kind) {
-  if (module.id === 'concert')
-      return module.url + '/graphics.html?clean=1&observer=1' + (kind === 'pvw' ? '&preview=1' : '');
+function outputUrl(module) {
   const route =
     module.id === 'football'
       ? '/titles/graphics.html'
       : module.id === 'stage'
         ? '/stage/graphics.html'
         : '/ae/graphics.html';
-  return module.url + route + (kind === 'pvw' ? '?workspacePreview=1' : '');
+  return module.url + route + '?workspacePreview=1';
 }
 function renderScreens() {
   const active = activeModules();
-  $('pvwPanel').hidden = view === 'pgm';
-  $('pgmPanel').hidden = view === 'pvw';
-  $('screens').classList.toggle('single', view !== 'dual');
-  $('screenNote').hidden = tab !== 'all';
-  const concert = active.find((item) => item.id === 'concert');
-  $('concertEditor').hidden = !concert;
-  $('concertEditor').href = concert ? concert.url + '/edit.html' : '#';
-  for (const kind of ['pvw', 'pgm']) {
-    const canvas = $(kind + 'Canvas');
-    canvas.querySelectorAll('iframe').forEach((frame) => frame.remove());
-    if ((kind === 'pvw' && view === 'pgm') || (kind === 'pgm' && view === 'pvw')) continue;
-    for (const module of active) {
-      const frame = document.createElement('iframe');
-      frame.setAttribute('allowtransparency', 'true');
-      frame.dataset.module = module.id;
-      frame.title = names[module.id] + (kind === 'pvw' ? '预览' : '播出');
-      frame.src = outputUrl(module, kind);
-      if (kind === 'pvw') {
-        frame.onload = () => sendDraft(module.id);
-        canvas.insertBefore(frame, $('handles'));
-      } else canvas.append(frame);
-    }
+  const canvas = $('pvwCanvas');
+  canvas.querySelectorAll('iframe').forEach((frame) => frame.remove());
+  for (const module of active) {
+    if (module.editorPath) continue;
+    const frame = document.createElement('iframe');
+    frame.setAttribute('allowtransparency', 'true');
+    frame.dataset.module = module.id;
+    frame.title = names[module.id] + '布局';
+    frame.src = outputUrl(module);
+    frame.onload = () => sendDraft(module.id);
+    canvas.insertBefore(frame, $('handles'));
   }
   const options = active.flatMap((module) =>
     definitions[module.id].map(([key, label]) => ({
@@ -384,7 +372,12 @@ async function refresh() {
       JSON.stringify(next.map((item) => [item.id, item.url])) !==
       JSON.stringify(modules.map((item) => [item.id, item.url]));
     modules = next;
-    if (tab !== 'all' && !modules.some((item) => item.id === tab)) tab = 'all';
+    if (!modules.some((item) => item.id === tab)) tab = modules[0]?.id || '';
+    const currentModule = modules.find((item) => item.id === tab);
+    if (currentModule?.editorPath) {
+      location.replace(currentModule.url + currentModule.editorPath);
+      return;
+    }
     for (const module of modules) {
       if (module.id === 'concert') continue;
       const current = (await api('/api/workspace/layout/' + module.id)).layout;
@@ -442,16 +435,6 @@ $('size').onchange = () => {
     drawHandle();
   } else fillControls();
 };
-document.querySelectorAll('[data-view]').forEach(
-  (button) =>
-    (button.onclick = () => {
-      view = button.dataset.view;
-      document
-        .querySelectorAll('[data-view]')
-        .forEach((entry) => entry.setAttribute('aria-pressed', String(entry === button)));
-      renderScreens();
-    }),
-);
 $('reset').onclick = async () => {
   for (const id of Object.keys(draft)) delete draft[id];
   await refresh();
@@ -476,7 +459,7 @@ $('apply').onclick = async () => {
     }
     $('notice').textContent = '已应用到播出画面。';
   } catch (error) {
-    $('notice').textContent = error.message + '；未成功的调整仍保留在 PVW。';
+    $('notice').textContent = error.message + '。未应用的调整保留在编辑窗口。';
   } finally {
     busy = false;
     fillControls();

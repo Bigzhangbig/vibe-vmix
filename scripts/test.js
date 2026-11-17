@@ -35,6 +35,7 @@ if (!ui) run([
   '--test',
   'tests/core.test.js',
   'tests/workspace.test.js',
+  'tests/workspace-ui.test.js',
   'tests/concert.test.js',
   'tests/concert-layout.test.js',
   'tests/concert-workspace.test.js',

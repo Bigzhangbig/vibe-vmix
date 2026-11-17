@@ -14,7 +14,7 @@ using Microsoft.Web.WebView2.WinForms;
 [assembly: System.Reflection.AssemblyTitle("转播包装工作台")]
 [assembly: System.Reflection.AssemblyProduct("转播包装工作台")]
 [assembly: System.Reflection.AssemblyVersion("2.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("2.0.0-beta.2-bit-autumn.1")]
+[assembly: System.Reflection.AssemblyInformationalVersion("2.0.0-beta.2-bit-autumn.2")]
 
 internal static class Program {
     internal static readonly string Root = AppDomain.CurrentDomain.BaseDirectory;
@@ -72,14 +72,14 @@ internal static class Program {
         using (var response = request.GetResponse()) using (var reader = new StreamReader(response.GetResponseStream())) return Json.Deserialize<Dictionary<string, object>>(reader.ReadToEnd());
     }
     internal static string StageOrigin() {
-        foreach (Dictionary<string, object> entry in (object[])Workspace()["modules"]) if (Convert.ToString(entry["id"]) == "stage" && Convert.ToBoolean(entry["enabled"])) return Convert.ToString(entry["url"]);
+        foreach (Dictionary<string, object> entry in (System.Collections.IEnumerable)Workspace()["modules"]) if (Convert.ToString(entry["id"]) == "stage" && Convert.ToBoolean(entry["enabled"])) return Convert.ToString(entry["url"]);
         throw new Exception("舞台模块尚未启用。");
     }
     internal static bool Local(string value) {
         Uri uri;
         if (!Uri.TryCreate(value, UriKind.Absolute, out uri) || uri.Scheme != "http" || uri.Host != "127.0.0.1") return false;
         if (uri.GetLeftPart(UriPartial.Authority) == Origin) return true;
-        try { foreach (Dictionary<string, object> entry in (object[])Workspace()["modules"]) if (Convert.ToBoolean(entry["enabled"]) && Convert.ToString(entry["url"]) == uri.GetLeftPart(UriPartial.Authority)) return true; } catch { }
+        try { foreach (Dictionary<string, object> entry in (System.Collections.IEnumerable)Workspace()["modules"]) if (Convert.ToBoolean(entry["enabled"]) && Convert.ToString(entry["url"]) == uri.GetLeftPart(UriPartial.Authority)) return true; } catch { }
         return false;
     }
     internal static void Stop() {
@@ -137,7 +137,7 @@ internal sealed class WorkspaceForm : Form {
                 string id = message.ContainsKey("module") ? Convert.ToString(message["module"]) : "all";
                 if (!new List<string> { "all", "stage", "football", "ae-live" }.Contains(id)) return;
                 var child = new WorkspaceForm(Program.Origin + "/workspace/preview.html?module=" + Uri.EscapeDataString(id), false);
-                child.Text = "预览与布局"; child.Show(this);
+                child.Text = "布局编辑"; child.Show(this);
             } else if (type == "import-source") {
                 using (var picker = new OpenFileDialog()) {
                     picker.Title = "链接舞台包装工程"; picker.Filter = "包装工程|*.gtzip;*.gtxml;*.aep;*.aepx;*.nbtitle;*.nbtlproj;*.nbtlpkg"; picker.CheckFileExists = true;
@@ -150,7 +150,7 @@ internal sealed class WorkspaceForm : Form {
                 Dictionary<string, object> library;
                 using (var response = await request.GetResponseAsync()) using (var reader = new StreamReader(response.GetResponseStream())) library = Program.Json.Deserialize<Dictionary<string, object>>(await reader.ReadToEndAsync());
                 string id = Convert.ToString(message["assetId"]), file = null;
-                foreach (Dictionary<string, object> entry in (object[])library["assets"]) {
+                foreach (Dictionary<string, object> entry in (System.Collections.IEnumerable)library["assets"]) {
                     if (Convert.ToString(entry["id"]) != id) continue;
                     if (entry.ContainsKey("sourcePath")) file = Convert.ToString(entry["sourcePath"]);
                     else file = Path.Combine(Program.Data, "stage", "assets", Path.GetFileName(Convert.ToString(entry["file"])));
