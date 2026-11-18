@@ -2,7 +2,7 @@
 
 给 vMix 用的转播包装工具。深秋歌会合并版内置原版 WebM 包装素材、歌曲、逐句歌词和版式编辑，统一在工作台中启停，保留舞台、足球和 AE 模块。见[深秋歌会使用说明](docs/BIT_AUTUMN_LIVE.md)。
 
-下载本仓库的 [Windows 歌会合并版](https://github.com/Bigzhangbig/vibe-vmix/releases/tag/v2.0.0-beta.2-bit-autumn.3)，完整解压后运行「转播包装工作台.exe」，点击左侧「深秋歌会」。
+在[深秋歌会 Release](https://github.com/Bigzhangbig/vibe-vmix/releases/tag/v2.0.0-beta.2-bit-autumn.4) 下载 Windows 工作台和双款报幕模板。工作台完整解压后运行「转播包装工作台.exe」，点击左侧「深秋歌会」。模板包单独解压，可用网页编辑器准备图形，也可在 vMix 里加载 GT 标题。
 
 - 正式版 1.1.0 · [GitHub 下载](https://github.com/AlanHe0728/vibe-vmix/releases/tag/v1.1.0) · [Gitee 下载](https://gitee.com/alanhe0728/vibe-vmix/releases/tag/v1.1.0)
 - Beta 2.0.0-beta.2 · [GitHub 下载](https://github.com/AlanHe0728/vibe-vmix/releases/tag/v2.0.0-beta.2) · [Gitee 源码](https://gitee.com/alanhe0728/vibe-vmix/tree/beta)

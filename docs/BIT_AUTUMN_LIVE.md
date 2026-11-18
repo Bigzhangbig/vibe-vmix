@@ -40,6 +40,6 @@ Windows 歌会合并版完整解压后运行「转播包装工作台.exe」，�
 
 - 歌会预监可导出 1080p 透明 PNG 序列 ZIP 或带 Alpha 的 ProRes 4444 MOV（无音轨）。MOV 需要 PATH 中的 FFmpeg，或设置 `BROADCAST_FFMPEG`。在 vMix 中使用 PNG 序列时，先解压并选择 Image Sequence 的首帧，核对帧率和 Alpha。
 - 在「素材与导入」可上传或链接 AE 的 `.aep/.aepx`。外链素材请先在 AE 重新链接，或收集完整工程。可手填合成名，也可在 AE 运行 `jsx/export-compositions.jsx` 生成合成清单。工作台调用本机 AE 渲染，不会把 AE 工程转成网页图层。
-- AE 的输出模板要预先在本机 AE 建好。透明 PNG 选 PNG Sequence、RGB + Alpha、Straight；透明 MOV 选 QuickTime / ProRes 4444、RGB + Alpha、Straight。原主视觉提取和决赛播法见「50届决赛使用指南」。
+- AE 的输出模板要预先在本机 AE 建好。透明 PNG 选 PNG Sequence、RGB + Alpha、Straight；透明 MOV 选 QuickTime / ProRes 4444、RGB + Alpha、Straight。原主视觉提取和决赛播法见[50 届决赛使用指南](BIT_AUTUMN_FINALE50.md)。
 
 本版本未完全验证，可能存在BUG，如遇BUG请与开发者联系
