@@ -5,8 +5,98 @@ const path = require('node:path');
 const os = require('node:os');
 const net = require('node:net');
 const { spawn, execFile } = require('node:child_process');
+const { promisify } = require('node:util');
 const { CDP } = require('./browser');
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const powershell = 'C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe';
+
+async function checkDpi(cdp, sessionId, windowHandle, requireHighDpi) {
+  assert(Number.isSafeInteger(windowHandle) && windowHandle > 0, 'native window handle');
+  const command = `
+    $ErrorActionPreference = 'Stop'
+    Add-Type -TypeDefinition '
+      using System;
+      using System.Runtime.InteropServices;
+      public static class NativeDpi {
+        [StructLayout(LayoutKind.Sequential)]
+        public struct Rect { public int Left, Top, Right, Bottom; }
+        [StructLayout(LayoutKind.Sequential)]
+        public struct MonitorInfo { public int Size; public Rect Monitor, Work; public uint Flags; }
+        [DllImport("user32.dll")] public static extern IntPtr SetThreadDpiAwarenessContext(IntPtr context);
+        [DllImport("user32.dll")] public static extern IntPtr GetWindowDpiAwarenessContext(IntPtr window);
+        [DllImport("user32.dll")] public static extern bool AreDpiAwarenessContextsEqual(IntPtr a, IntPtr b);
+        [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr window);
+        [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr window, out Rect rect);
+        [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr window, out Rect rect);
+        [DllImport("user32.dll")] public static extern IntPtr MonitorFromWindow(IntPtr window, uint flags);
+        [DllImport("user32.dll", EntryPoint = "GetMonitorInfoW")] public static extern bool GetMonitorInfo(IntPtr monitor, ref MonitorInfo info);
+      }'
+    $window = [IntPtr]::new(${windowHandle})
+    $perMonitorV2 = [IntPtr]::new(-4)
+    if ([NativeDpi]::SetThreadDpiAwarenessContext($perMonitorV2) -eq [IntPtr]::Zero) {
+      throw 'Cannot query physical window coordinates'
+    }
+    $bounds = New-Object NativeDpi+Rect
+    $client = New-Object NativeDpi+Rect
+    $monitor = New-Object NativeDpi+MonitorInfo
+    $monitor.Size = [Runtime.InteropServices.Marshal]::SizeOf($monitor)
+    if (-not [NativeDpi]::GetWindowRect($window, [ref]$bounds) -or
+        -not [NativeDpi]::GetClientRect($window, [ref]$client) -or
+        -not [NativeDpi]::GetMonitorInfo([NativeDpi]::MonitorFromWindow($window, 2), [ref]$monitor)) {
+      throw 'Cannot read window or monitor geometry'
+    }
+    [pscustomobject]@{
+      perMonitorV2 = [NativeDpi]::AreDpiAwarenessContextsEqual([NativeDpi]::GetWindowDpiAwarenessContext($window), $perMonitorV2)
+      dpi = [NativeDpi]::GetDpiForWindow($window)
+      bounds = $bounds
+      workArea = $monitor.Work
+      clientWidth = $client.Right - $client.Left
+      clientHeight = $client.Bottom - $client.Top
+    } | ConvertTo-Json -Compress
+  `;
+  const { stdout } = await promisify(execFile)(
+    powershell,
+    ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-Command', command],
+    { windowsHide: true, timeout: 15000 },
+  );
+  const native = JSON.parse(stdout);
+  const viewport = await cdp.eval(
+    sessionId,
+    '({ ratio: devicePixelRatio, width: innerWidth, height: innerHeight })',
+  );
+  console.log('Native DPI window:', JSON.stringify({ ...native, viewport }));
+  assert(native.perMonitorV2, 'workspace window is PerMonitorV2 DPI aware');
+  if (requireHighDpi) assert(native.dpi > 96, 'workspace monitor is scaled above 100%');
+  const { bounds, workArea } = native;
+  assert(
+    bounds.Left >= workArea.Left &&
+      bounds.Top >= workArea.Top &&
+      bounds.Right <= workArea.Right &&
+      bounds.Bottom <= workArea.Bottom,
+    'workspace window fits within its monitor work area',
+  );
+  assert(
+    Math.abs(viewport.ratio - native.dpi / 96) <= 0.01,
+    'WebView2 DPR matches native window DPI',
+  );
+  const capture = await cdp.send('Page.captureScreenshot', { format: 'png' }, sessionId);
+  const png = Buffer.from(capture.data, 'base64');
+  const width = png.readUInt32BE(16);
+  const height = png.readUInt32BE(20);
+  assert(
+    Math.abs(width - viewport.width * viewport.ratio) <= 2 &&
+      Math.abs(height - viewport.height * viewport.ratio) <= 2,
+    `WebView2 capture ${width}x${height} matches its scaled CSS viewport`,
+  );
+  assert(
+    Math.abs(width - native.clientWidth) <= 2 && Math.abs(height - native.clientHeight) <= 2,
+    `WebView2 capture ${width}x${height} fills the native physical client area`,
+  );
+  console.log(
+    `PASS native rendering at ${Math.round((native.dpi / 96) * 100)}%: ${width}x${height} physical pixels`,
+  );
+}
+
 async function resources(pid) {
   const command =
     '$taskAll = Get-CimInstance Win32_Process; $taskIds = [System.Collections.Generic.HashSet[int]]::new(); [void]$taskIds.Add(' +
@@ -14,7 +104,7 @@ async function resources(pid) {
     '); do { $taskChanged = $false; foreach ($taskProcess in $taskAll) { if ($taskIds.Contains([int]$taskProcess.ParentProcessId) -and $taskIds.Add([int]$taskProcess.ProcessId)) { $taskChanged = $true } } } while ($taskChanged); $taskRows = Get-Process -Id @($taskIds) -ErrorAction SilentlyContinue; [pscustomobject]@{ processes = @($taskRows).Count; privateMB = [math]::Round(($taskRows | Measure-Object PrivateMemorySize64 -Sum).Sum / 1MB,1); workingSetMB = [math]::Round(($taskRows | Measure-Object WorkingSet64 -Sum).Sum / 1MB,1); cpuMs = ($taskRows | ForEach-Object { $_.TotalProcessorTime.TotalMilliseconds } | Measure-Object -Sum).Sum; sampledAt = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() } | ConvertTo-Json -Compress';
   return new Promise((resolve, reject) =>
     execFile(
-      'C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe',
+      powershell,
       ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-Command', command],
       { windowsHide: true },
       (error, stdout) => {
@@ -90,6 +180,10 @@ async function main() {
     await cdp.send('Runtime.enable', {}, sessionId);
     await cdp.send('Page.enable', {}, sessionId);
     await cdp.until(sessionId, "document.querySelectorAll('.module-option').length===4");
+    const requireHighDpi = process.argv.includes('--require-high-dpi');
+    if (requireHighDpi || process.argv.includes('--dpi')) {
+      await checkDpi(cdp, sessionId, ready.windowHandle, requireHighDpi);
+    }
     assert.equal(
       await cdp.eval(
         sessionId,
@@ -220,7 +314,7 @@ async function main() {
       ready.windowHandle +
       '),16,[IntPtr]::Zero,[IntPtr]::Zero)';
     const close = spawn(
-      'C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe',
+      powershell,
       ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-Command', closeScript],
       { windowsHide: true, stdio: 'ignore' },
     );
