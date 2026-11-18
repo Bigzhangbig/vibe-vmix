@@ -14,7 +14,7 @@ using Microsoft.Web.WebView2.WinForms;
 [assembly: System.Reflection.AssemblyTitle("转播包装工作台")]
 [assembly: System.Reflection.AssemblyProduct("转播包装工作台")]
 [assembly: System.Reflection.AssemblyVersion("2.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("2.0.0-beta.2-bit-autumn.3")]
+[assembly: System.Reflection.AssemblyInformationalVersion("2.0.0-beta.2-bit-autumn.4")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.7.2")]
 
 internal static class Program {

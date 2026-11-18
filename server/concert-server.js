@@ -19,9 +19,31 @@ const {
   LAYOUT_VERSION,
   DEFAULT_LAYOUT,
   TEXT_IDS,
+  ANNOUNCE_LAYOUT_IDS,
   ANNOUNCE_PRESETS,
+  placementFor,
   migrateLayout,
 } = require('./concert-layout');
+
+const ANNOUNCE_FIELD_LIMITS = { header: 80, title: 160, performer: 160, note: 240 };
+function readAnnouncementFields(value) {
+  if (value == null) return null;
+  if (
+    typeof value !== 'object' ||
+    Array.isArray(value) ||
+    Object.keys(value).some((key) => !Object.hasOwn(ANNOUNCE_FIELD_LIMITS, key))
+  )
+    throw new Error('报幕文本框数据无效');
+  return Object.fromEntries(
+    Object.entries(ANNOUNCE_FIELD_LIMITS).map(([key, limit]) => {
+      if (!Object.hasOwn(value, key)) return [key, ''];
+      if (typeof value[key] !== 'string') throw new Error('报幕文本框只接受文字');
+      const text = value[key].trim();
+      if (text.length > limit) throw new Error('报幕文本框内容太长');
+      return [key, text];
+    }),
+  );
+}
 
 function createConcertServer({ dataDirectory, project = path.resolve(__dirname, '..') }) {
   const DATA_DIR = path.resolve(dataDirectory);
@@ -63,7 +85,7 @@ function createConcertServer({ dataDirectory, project = path.resolve(__dirname, 
     tick: 0,
     layout: DEFAULT_LAYOUT,
     channels: {
-      announce: { on: false, text: '' },
+      announce: { on: false, text: '', fields: null },
       lyric: { on: false, index: 0, text: '', auto: true, hold: 9 },
       qualify: { on: false, title: '晋级', text: '' },
       credits: { on: false, paused: false, offset: 0, speed: 40 },
@@ -267,7 +289,13 @@ function createConcertServer({ dataDirectory, project = path.resolve(__dirname, 
     if (!state.channels[key]) state.channels[key] = { ...DEFAULT_STATE.channels[key] };
   }
   // A restored announcement starts a fresh renderer playback session.
-  if (state.channels.announce.on) state.channels.announce.playbackId = randomUUID();
+  const announcement = state.channels.announce;
+  try {
+    announcement.fields = readAnnouncementFields(announcement.fields);
+  } catch {
+    announcement.fields = null;
+  }
+  if (announcement.on) announcement.playbackId = randomUUID();
   if (layoutCleaned) {
     try {
       writeJsonAtomic(path.join(DATA_DIR, 'state.json'), state);
@@ -316,7 +344,9 @@ function createConcertServer({ dataDirectory, project = path.resolve(__dirname, 
       startedAt: STARTED_AT,
       clients: clients.size,
       layout: state.layout,
+      layoutDefaults: DEFAULT_LAYOUT,
       announcePlacement: state.announcePlacement,
+      announcePresets: ANNOUNCE_PRESETS,
       channels: state.channels,
       lyrics,
       credits: creditsDoc,
@@ -445,6 +475,7 @@ function createConcertServer({ dataDirectory, project = path.resolve(__dirname, 
     state.channels.announce = {
       ...announcement,
       text,
+      fields: null,
       playbackId: announcement.on ? randomUUID() : announcement.playbackId,
     };
     cancelHandoff();
@@ -456,7 +487,7 @@ function createConcertServer({ dataDirectory, project = path.resolve(__dirname, 
         tick: nextTick(),
         channel: 'announce',
         action: 'cue',
-        payload: { text, playbackId: state.channels.announce.playbackId },
+        payload: { text, fields: null, playbackId: state.channels.announce.playbackId },
       });
     if (wasOn)
       broadcast({
@@ -473,6 +504,11 @@ function createConcertServer({ dataDirectory, project = path.resolve(__dirname, 
     if (!state.channels[channel]) {
       return { ok: false, error: '未知通道: ' + channel };
     }
+    // Validate all text fields before changing the current song or any on-air state.
+    const fields =
+      channel === 'announce' && action !== 'off' && Object.hasOwn(payload, 'fields')
+        ? readAnnouncementFields(payload.fields)
+        : undefined;
     if (payload.songId !== undefined) {
       if (!['announce', 'lyric'].includes(channel) || action === 'off')
         return { ok: false, error: '只能在报幕或歌词上屏时选择歌曲' };
@@ -489,15 +525,20 @@ function createConcertServer({ dataDirectory, project = path.resolve(__dirname, 
 
     if (channel === 'announce') {
       closeExclusive('announce');
-      const text = payload.text != null ? String(payload.text) : state.channels.announce.text || '';
+      const current = state.channels.announce;
+      const nextFields =
+        fields === undefined ? (payload.text != null ? null : current.fields) : fields;
+      const text = nextFields
+        ? Object.values(nextFields).filter(Boolean).join('\n')
+        : payload.text != null ? String(payload.text) : current.text || '';
       const playbackId = randomUUID();
-      state.channels.announce = { on: true, text, playbackId };
+      state.channels.announce = { on: true, text, fields: nextFields, playbackId };
       broadcast({
         type: 'cue',
         tick: nextTick(),
         channel: 'announce',
         action: 'on',
-        payload: { text, video: config.backgrounds.announce || null, playbackId },
+        payload: { text, fields: nextFields, video: config.backgrounds.announce || null, playbackId },
       });
       markDirty();
       return { ok: true };
@@ -731,16 +772,36 @@ function createConcertServer({ dataDirectory, project = path.resolve(__dirname, 
         return;
       }
       const ext = path.extname(filePath).toLowerCase();
-      res.writeHead(200, {
+      const headers = {
         'Content-Type': MIME[ext] || 'application/octet-stream',
         'Content-Length': st.size,
         'Cache-Control': ext === '.webm' || ext === '.ttf' ? 'public, max-age=604800' : 'no-store',
-      });
+      };
+      const video = pathname.startsWith('/assets/') && ['.webm', '.mp4'].includes(ext);
+      if (video) headers['Accept-Ranges'] = 'bytes';
+      // Chromium requests video byte ranges when seeking to a stable editor frame.
+      const range = video && req.method === 'GET' && /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
+      let slice;
+      if (range && (range[1] || range[2])) {
+        const start = range[1] ? Number(range[1]) : Math.max(0, st.size - Number(range[2]));
+        const end = range[1] && range[2] ? Math.min(st.size - 1, Number(range[2])) : st.size - 1;
+        if (!Number.isSafeInteger(start) || start > end) {
+          res.writeHead(416, { 'Accept-Ranges': 'bytes', 'Content-Range': 'bytes */' + st.size });
+          res.end();
+          return;
+        }
+        headers['Content-Range'] = `bytes ${start}-${end}/${st.size}`;
+        headers['Content-Length'] = end - start + 1;
+        slice = { start, end };
+      }
+      res.writeHead(slice ? 206 : 200, headers);
       if (req.method === 'HEAD') {
         res.end();
         return;
       }
-      fs.createReadStream(filePath).pipe(res);
+      const stream = fs.createReadStream(filePath, slice);
+      stream.on('error', () => res.destroy()).pipe(res);
+      res.once('close', () => stream.destroy());
     });
   }
 
@@ -978,14 +1039,8 @@ function createConcertServer({ dataDirectory, project = path.resolve(__dirname, 
             applied.push(item.id);
           }
           state.layout = draftLayout;
-          if (
-            items.some(
-              (item) =>
-                ['announceBg', 'announceText'].includes(item?.id) &&
-                ['x', 'y', 'w', 'h', 'size', 'scale'].some((key) => Object.hasOwn(item, key)),
-            )
-          )
-            state.announcePlacement = 'custom';
+          if (applied.some((id) => ANNOUNCE_LAYOUT_IDS.includes(id)))
+            state.announcePlacement = placementFor(draftLayout);
           markDirty();
           broadcast({
             type: 'layout',
@@ -1231,7 +1286,7 @@ function createConcertServer({ dataDirectory, project = path.resolve(__dirname, 
   /** 校验并写入一个元素的布局与排版，返回 { id } 或 { error } */
   function applyLayoutPatch(body, layout) {
     const id = String((body && body.id) || '');
-    if (!DEFAULT_LAYOUT[id]) return { error: '未知元素: ' + id };
+    if (!Object.hasOwn(DEFAULT_LAYOUT, id)) return { error: '未知元素: ' + id };
     const current = layout[id] || { ...DEFAULT_LAYOUT[id] };
     const next = { ...current };
     // 允许负坐标：全屏背景可以整块平移（带着文字一起走），只要不无限跑掉

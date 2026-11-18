@@ -147,7 +147,7 @@ function createWorkspaceServer({
         url: loaded.get(entry.id)?.url || null,
       })),
       loaded: [...loaded.keys()],
-      version: '2.0.0-beta.2-bit-autumn.3',
+      version: '2.0.0-beta.2-bit-autumn.4',
     };
   }
   function validate(ids) {

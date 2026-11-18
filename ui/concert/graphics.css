@@ -224,3 +224,7 @@ body.edit-mode .el.solo {
 .text-badge .brand-badge { display: flex; }
 .branded-package .qualify-title-box .text-inner, .branded-package .credits-scroll .role { color: var(--brand-accent, #9fdaed) !important; }
 body.edit-mode .text-box[data-overflow="true"] { outline-color: #ff765e; }
+body.layout-canvas .el.preview-on { outline: none; transition: none; }
+body.layout-canvas.edit-mode .el.solo { outline: 1px dashed #c4d1e88c; outline-offset: -1px; }
+body.layout-canvas.edit-mode .el.solo.selected { outline: 3px solid #ffd640; outline-offset: -3px; }
+body.layout-canvas.edit-mode .text-box[data-overflow="true"] { outline-color: #ff765e; }

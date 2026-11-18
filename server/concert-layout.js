@@ -1,6 +1,7 @@
 'use strict';
 const FONT_FAMILY = 'Shanggu Sans SC';
-const LAYOUT_VERSION = 4;
+const V4_LAYOUT_VERSION = 4;
+const LAYOUT_VERSION = 5;
 const TEXT_DEFAULT = {
   font: FONT_FAMILY,
   weight: 700,
@@ -25,15 +26,32 @@ const ANNOUNCE_PRESETS = {
   'lower-left': {
     announceBg: { x: -96, y: 140, w: 1728, h: 972 },
     announceText: { x: 201, y: 725, w: 495, h: 243, size: 46 },
+    announceHeader: { x: 216, y: 732, w: 465, h: 38, size: 26 },
+    announceTitle: { x: 216, y: 773, w: 465, h: 70, size: 47 },
+    announcePerformer: { x: 216, y: 847, w: 465, h: 57, size: 33 },
+    announceNote: { x: 216, y: 912, w: 465, h: 44, size: 25 },
   },
   center: {
     announceBg: { x: 166, y: -480, w: 2496, h: 1404 },
     announceText: { x: 595, y: 365, w: 715, h: 351, size: 62 },
+    announceHeader: { x: 610, y: 378, w: 700, h: 54, size: 37 },
+    announceTitle: { x: 610, y: 441, w: 700, h: 102, size: 70 },
+    announcePerformer: { x: 610, y: 552, w: 700, h: 72, size: 46 },
+    announceNote: { x: 610, y: 636, w: 700, h: 63, size: 35 },
   },
 };
+const ANNOUNCE_LAYOUT_IDS = Object.keys(ANNOUNCE_PRESETS['lower-left']);
+const LEGACY_ANNOUNCE_IDS = ['announceBg', 'announceText'];
+const ANNOUNCE_FIELD_IDS = ANNOUNCE_LAYOUT_IDS.filter((id) => !LEGACY_ANNOUNCE_IDS.includes(id));
 const DEFAULT_LAYOUT = {
   announceBg: { ...ANNOUNCE_PRESETS['lower-left'].announceBg },
   announceText: textRect(201, 725, 495, 243, 46),
+  ...Object.fromEntries(
+    ANNOUNCE_FIELD_IDS.map((id) => [
+      id,
+      { ...TEXT_DEFAULT, ...ANNOUNCE_PRESETS['lower-left'][id] },
+    ]),
+  ),
   lyricBg: { x: -210, y: 710, w: 768, h: 432 },
   lyricText: textRect(270, 835, 1040, 130, 52, { align: 'left' }),
   qualifyBg: { x: 578, y: -360, w: 2496, h: 1404 },
@@ -61,21 +79,59 @@ const GEOMETRY_GROUPS = [
   ['qualifyBg', 'qualifyTitle', 'qualifyText'],
   ['badge'],
 ];
-function placementFor(layout) {
+function placementFor(layout, ids = ANNOUNCE_LAYOUT_IDS) {
   return (
     Object.keys(ANNOUNCE_PRESETS).find((placement) =>
-      Object.entries(ANNOUNCE_PRESETS[placement]).every(
-        ([id, defaults]) =>
-          Object.entries(defaults).every(([key, value]) => layout[id][key] === value) &&
-          (layout[id].scale ?? 1) === 1,
+      ids.every(
+        (id) =>
+          Object.entries(ANNOUNCE_PRESETS[placement][id]).every(
+            ([key, value]) => layout[id]?.[key] === value,
+          ) && (layout[id]?.scale ?? 1) === 1,
       ),
     ) || 'custom'
   );
 }
+
+function defaultAnnouncementFields(layout) {
+  const placement = placementFor(layout, LEGACY_ANNOUNCE_IDS);
+  const preset = ANNOUNCE_PRESETS[placement];
+  const legacyText = layout.announceText;
+  const typography = Object.fromEntries(
+    Object.keys(TEXT_DEFAULT).map((key) => [key, legacyText[key]]),
+  );
+  if (preset) {
+    return Object.fromEntries(
+      ANNOUNCE_FIELD_IDS.map((id) => [id, { ...typography, ...preset[id] }]),
+    );
+  }
+
+  // Fit the four new text lines into the user's former combined text box.
+  const reference = ANNOUNCE_PRESETS['lower-left'];
+  const combined = reference.announceText;
+  const mapY = (y) => Math.round(legacyText.y + ((y - combined.y) * legacyText.h) / combined.h);
+  return Object.fromEntries(
+    ANNOUNCE_FIELD_IDS.map((id) => {
+      const field = reference[id];
+      const size = Math.round((legacyText.size * field.size) / combined.size);
+      return [
+        id,
+        {
+          ...typography,
+          x: legacyText.x,
+          y: mapY(field.y),
+          w: legacyText.w,
+          h: Math.max(1, mapY(field.y + field.h) - mapY(field.y)),
+          size: Math.min(400, Math.max(12, size)),
+        },
+      ];
+    }),
+  );
+}
+
 function migrateLayout(state) {
   const before = JSON.stringify([state.layoutVersion, state.layout, state.announcePlacement]);
   const oldLayout = state.layout || {};
-  const upgrading = (state.layoutVersion || 0) < LAYOUT_VERSION;
+  const upgrading = (state.layoutVersion || 0) < V4_LAYOUT_VERSION;
   const hadQualifyTitle = !!oldLayout.qualifyTitle;
   const legacyQualify = oldLayout.qualifyText ? { ...oldLayout.qualifyText } : null;
   const canMigrate = new Map();
@@ -95,6 +151,7 @@ function migrateLayout(state) {
     for (const id of group) canMigrate.set(id, unchanged);
   }
   for (const [id, defaults] of Object.entries(DEFAULT_LAYOUT)) {
+    if (ANNOUNCE_FIELD_IDS.includes(id)) continue;
     const saved = oldLayout[id];
     const old = V3_DEFAULTS[id];
     const preserveGroup = upgrading && old && !canMigrate.get(id);
@@ -112,6 +169,8 @@ function migrateLayout(state) {
     }
     oldLayout[id] = merged;
   }
+  const fieldDefaults = defaultAnnouncementFields(oldLayout);
+  for (const id of ANNOUNCE_FIELD_IDS) oldLayout[id] = { ...fieldDefaults[id], ...oldLayout[id] };
   if ((state.layoutVersion || 0) < 3 && !hadQualifyTitle && legacyQualify) {
     const legacy = legacyQualify;
     const untouched = legacy.x === 1020 && legacy.y === 268 && legacy.w === 740 && legacy.h === 384;
@@ -138,6 +197,8 @@ module.exports = {
   LAYOUT_VERSION,
   DEFAULT_LAYOUT,
   TEXT_IDS,
+  ANNOUNCE_LAYOUT_IDS,
   ANNOUNCE_PRESETS,
+  placementFor,
   migrateLayout,
 };

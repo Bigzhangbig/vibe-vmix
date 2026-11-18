@@ -60,11 +60,14 @@
         <div class="hint" id="songMeta">—</div>
       </div>
 
-      <div class="field">
-        <span>报幕文本 <button id="btnFillAnnounce" class="mini ghost">填入默认</button></span>
-        <textarea id="announceText" rows="3" maxlength="2000" placeholder="填写待播报幕，点击上屏后播出"></textarea>
-        <div class="hint">选择节目和修改文字先存为本页草稿，点击「报幕上屏」或「歌词上屏」才切换节目。</div>
+      <div class="card-head"><h2>报幕文字</h2><button id="btnFillAnnounce" class="mini ghost">从节目单填入</button></div>
+      <div class="row2">
+        <label class="field"><span>场次或节目编号</span><input id="announceHeader" maxlength="80" placeholder="如：决赛 · 第 1 个节目"></label>
+        <label class="field"><span>曲名</span><input id="announceTitle" maxlength="160" placeholder="如：《深秋》"></label>
+        <label class="field"><span>表演者</span><input id="announcePerformer" maxlength="160" placeholder="如：演唱：校园合唱团"></label>
+        <label class="field"><span>补充说明</span><input id="announceNote" maxlength="240" placeholder="如：原创曲目，可留空"></label>
       </div>
+      <p class="hint">四项都可留空；可在「编辑」分别调整位置和字体。文字先留在本页草稿，点「报幕上屏」才播出。</p>
 
       <div class="row3">
         <button id="btn-announce" class="chan-toggle big" data-command disabled>报幕上屏</button>

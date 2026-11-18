@@ -9,9 +9,10 @@
  */
 (function () {
   const params = new URLSearchParams(location.search);
-  const EDIT = params.get('edit') === '1';
   const CLEAN = params.get('clean') === '1';
   const PREVIEW = params.get('preview') === '1';
+  const LOCAL_EDITOR = PREVIEW && params.has('layout') && window.parent !== window;
+  const EDIT = LOCAL_EDITOR || params.get('edit') === '1';
   const OBSERVER = PREVIEW || params.get('observer') === '1';
   if (PREVIEW) document.documentElement.classList.add('layout-editor');
 
@@ -24,9 +25,11 @@
     els[el.dataset.el] = el;
   });
 
+  const ANNOUNCE_FIELDS = { header: 'announceHeader', title: 'announceTitle', performer: 'announcePerformer', note: 'announceNote' };
+  const ANNOUNCE_TEXTS = ['announceText', ...Object.values(ANNOUNCE_FIELDS)];
   // 拖动背景时一起走的文字元素
   const GROUPS = {
-    announce: ['announceBg', 'announceText'],
+    announce: ['announceBg', ...ANNOUNCE_TEXTS],
     lyric: ['lyricBg', 'lyricText'],
     qualify: ['qualifyBg', 'qualifyTitle', 'qualifyText'],
   };
@@ -41,6 +44,9 @@
   let announcePlaybackId = '';
   let config = { fadeIn: 320, fadeOut: 240, font: { family: 'Microsoft YaHei', weight: 700, shadow: true } };
   let editSelected = null;
+  let canEdit = EDIT && !LOCAL_EDITOR;
+  let localSelection;
+  let localReady = false;
 
   function mediaOf(el) {
     return el && (el.tagName === 'VIDEO' ? el : el.querySelector('video'));
@@ -99,7 +105,7 @@
       invalidateMediaRequest(mediaOf(els.badge));
       mediaOf(els.badge).pause();
     }
-    else if (channels.badge?.on || els.badge.classList.contains('preview-on')) showVideo('badge');
+    else if (!LOCAL_EDITOR && (channels.badge?.on || els.badge.classList.contains('preview-on'))) showVideo('badge');
     document.fonts.ready.then(refitAll);
     refitAll();
   }
@@ -133,6 +139,10 @@
   // 文字元素预览时的占位样例：没有内容也能看出字号、字体、位置
   const SAMPLE_TEXT = {
     announceText: '第 1 个节目\n《示例曲目》\n演唱：示例歌手',
+    announceHeader: '决赛 · 第 1 个节目',
+    announceTitle: '《秋夜与歌声》',
+    announcePerformer: '演唱：校园合唱团',
+    announceNote: '原创曲目 · 现场版',
     lyricText: '这一句是歌词的效果预览',
     qualifyTitle: '晋级名单',
     qualifyText: '示例选手 · 示例曲目',
@@ -140,6 +150,73 @@
   };
 
   let soloIds = new Set();
+
+  function stillBackground(id) {
+    const channel = BG_ID_TO_CHANNEL[id];
+    if (!channel || (channel === 'badge' && textBadgeEnabled())) return;
+    const video = mediaOf(els[id]);
+    const key = bgFile(channel);
+    const file = key && (assetOf(key).file || key);
+    if (!file) {
+      if (!video.dataset.src) return;
+      invalidateMediaRequest(video);
+      delete video.dataset.src;
+      video.removeAttribute('src');
+      video.load();
+      return;
+    }
+    const src = '/assets/' + encodeURIComponent(file) + '?layout-frame=1';
+    if (video.dataset.src === src) return;
+    invalidateMediaRequest(video);
+    clearTimeout(video._offTimer);
+    video.pause();
+    video.loop = false;
+    video.dataset.src = src;
+    const seek = () => {
+      video._pendingCanplay = null;
+      if (video.dataset.src === src && Number.isFinite(video.duration) && video.duration > 0)
+        video.currentTime = Math.min(4, video.duration * 0.4);
+    };
+    video._pendingCanplay = seek;
+    video.addEventListener('canplay', seek, { once: true });
+    video.src = src;
+    video.load();
+  }
+
+  function refreshLocalPreview() {
+    if (!localReady || !localSelection) return;
+    const { ids, target, editing } = localSelection;
+    soloIds = new Set(ids.filter((id) => Object.hasOwn(els, id)));
+    canEdit = editing === true;
+    document.body.classList.toggle('edit-mode', canEdit);
+    applySolo();
+    for (const [id, el] of Object.entries(els)) {
+      const visible = soloIds.has(id);
+      el.classList.toggle('preview-on', visible);
+      if (!visible) continue;
+      if (BG_ID_TO_CHANNEL[id]) stillBackground(id);
+      else if (id === 'creditsText') {
+        const scroll = document.getElementById('creditsScroll');
+        scroll.textContent = SAMPLE_TEXT.creditsText;
+        scroll.style.whiteSpace = 'pre-line';
+        applyCreditsStyle();
+      }
+      else if (SAMPLE_TEXT[id]) setText(id, SAMPLE_TEXT[id]);
+    }
+    if (canEdit) selectEl(soloIds.has(target) ? target : [...soloIds][0]);
+  }
+
+  if (LOCAL_EDITOR) {
+    document.body.classList.add('layout-canvas');
+    window.addEventListener('message', ({ source, origin, data }) => {
+      if (source !== window.parent || origin !== location.origin) return;
+      if (data?.type === 'concert-layout-data' && data.state) onSnapshot(data.state);
+      if (data?.type === 'concert-layout-preview' && Array.isArray(data.ids)) {
+        localSelection = data;
+        refreshLocalPreview();
+      }
+    });
+  }
 
   // 编辑模式下只让「正在编辑的对象」可见，其余全部隐藏
   function applySolo() {
@@ -158,6 +235,7 @@
     const asset = key ? assetOf(key) : {};
     const file = asset.file || key;
     if (!file) return;
+    clearTimeout(el._offTimer);
     const request = invalidateMediaRequest(el);
     const src = '/assets/' + encodeURIComponent(file);
     if (el.dataset.src !== src) {
@@ -711,15 +789,29 @@
     fitText(box, inner);
   }
 
+  function showAnnouncement(cue) {
+    const values = cue.fields
+      ? Object.fromEntries(Object.entries(ANNOUNCE_FIELDS).map(([key, id]) => [id, cue.fields[key]]))
+      : { announceText: cue.text };
+    for (const id of ANNOUNCE_TEXTS) {
+      const text = values[id] || '';
+      setText(id, text);
+      els[id].classList.toggle('on', !!text);
+    }
+  }
+
+  function hideAnnouncement() {
+    for (const id of ANNOUNCE_TEXTS) els[id].classList.remove('on');
+  }
+
   function applyChannels() {
     const c = channels;
     if (!c) return;
     if (c.announce && c.announce.on) {
-      els.announceText && els.announceText.classList.add('on');
-      setText('announceText', c.announce.text || '');
+      showAnnouncement(c.announce);
       showVideo('announce');
     } else {
-      els.announceText && els.announceText.classList.remove('on');
+      hideAnnouncement();
       hideVideo('announce');
     }
 
@@ -750,9 +842,14 @@
   function onSnapshot(s) {
     layout = s.layout || {};
     manifest = s.manifest || manifest;
-    channels = s.channels || {};
+    if (!LOCAL_EDITOR) channels = s.channels || {};
     applyConfig(s.config);
     applyLayout();
+    if (LOCAL_EDITOR) {
+      localReady = true;
+      refreshLocalPreview();
+      return;
+    }
     preloadBackgrounds();
     applyChannels();
     loadCredits();
@@ -769,13 +866,13 @@
           on: true,
           playbackId: msg.payload.playbackId,
           text: msg.payload.text != null ? msg.payload.text : (channels[ch].text || ''),
+          fields: msg.payload.fields || null,
         });
-        els.announceText && els.announceText.classList.add('on');
-        setText('announceText', channels[ch].text);
+        showAnnouncement(channels[ch]);
         showVideo('announce');
       } else {
         channels[ch].on = false;
-        els.announceText && els.announceText.classList.remove('on');
+        hideAnnouncement();
         hideVideo('announce');
       }
       return;
@@ -911,7 +1008,7 @@
   }
 
   function initEdit() {
-    document.body.classList.add('edit-mode');
+    document.body.classList.toggle('edit-mode', canEdit);
     if (CLEAN) document.body.classList.add('clean');
 
     let drag = null;
@@ -919,7 +1016,7 @@
     // 用 document 级委托：即使元素被缩放、被盖住，或指针移出元素，
     // 也不会丢掉 pointermove / pointerup。
     document.addEventListener('pointerdown', (e) => {
-      if (e.button !== 0) return;
+      if (!canEdit || e.button !== 0) return;
       const el = e.target && e.target.closest ? e.target.closest('.el') : null;
       if (!el) return;
       const id = el.dataset.el;
@@ -934,6 +1031,7 @@
         /* 忽略 */
       }
       selectEl(id);
+      if (LOCAL_EDITOR) window.parent.postMessage({ type: 'concert-layout-select', id }, location.origin);
 
       drag = {
         el,
@@ -994,15 +1092,16 @@
       } catch {
         /* 忽略 */
       }
+      const moved = parseFloat(el.style.left) !== drag.x0 || parseFloat(el.style.top) !== drag.y0;
       const items = [{ id: drag.id }].concat(drag.mates.map((m) => ({ id: m.id })));
       drag = null;
-      postLayout(items);
+      if (moved) postLayout(items);
     };
     document.addEventListener('pointerup', finish);
     document.addEventListener('pointercancel', finish);
 
     document.addEventListener('keydown', (e) => {
-      if (!editSelected || !els[editSelected]) return;
+      if (!canEdit || !editSelected || !els[editSelected]) return;
       const el = els[editSelected];
       const step = e.shiftKey ? 10 : 1;
       let dx = 0;
@@ -1024,7 +1123,7 @@
     });
 
     document.addEventListener('keyup', (e) => {
-      if (!editSelected) return;
+      if (!canEdit || !editSelected) return;
       if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
         postLayout({ id: editSelected });
       }
@@ -1090,5 +1189,6 @@
   if (CLEAN) document.body.classList.add('clean');
   fitStage();
   if (EDIT) initEdit();
-  connect();
+  if (LOCAL_EDITOR) window.parent.postMessage({ type: 'concert-layout-ready' }, location.origin);
+  else connect();
 })();

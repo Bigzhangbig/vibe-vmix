@@ -121,7 +121,7 @@ code {
   /* 所有页面的框体统一收在一条居中的竖带里，避免在大屏上铺满整幅 */
   width: min(1180px, 100%);
   margin: 0 auto;
-}.grid.cols-2 { grid-template-columns: 360px minmax(420px, 1fr); }.grid.cols-monitor { grid-template-columns: minmax(520px, 1.55fr) minmax(380px, 1fr); }.grid.cols-config { grid-template-columns: minmax(0, 1fr); }.col {
+}.grid.cols-2 { grid-template-columns: 360px minmax(420px, 1fr); }.grid.cols-config { grid-template-columns: minmax(0, 1fr); }.col {
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -251,7 +251,7 @@ button {
   border: 1px solid var(--line);
   border-radius: 8px;
   overflow: hidden;
-}.preview-box.big { aspect-ratio: 16 / 9; max-height: 62vh; }.preview-box iframe {
+}.preview-box iframe {
   display: block;
   width: 100%;
   height: 100%;
@@ -296,9 +296,8 @@ button {
 
 @media (max-width: 1280px) {
   body { overflow: auto; }
-  .grid { grid-template-columns: 1fr !important; overflow: visible; }
+  .grid:not(.cols-monitor) { grid-template-columns: 1fr !important; overflow: visible; }
   .col { overflow: visible; }
-  .preview-box.big { aspect-ratio: 16 / 9; }
 }.chan {
   position: relative;
   border: 1px solid var(--line);
@@ -615,3 +614,77 @@ button {
 button.danger { background: #511f24; border-color: #a9434e; color: #fff0f0; }
 button.danger:hover { background: #702a31; }
 [hidden] { display: none !important; }
+
+/* The layout editor uses the full window; the live and asset pages keep their normal widths. */
+body:has(> .grid.cols-monitor) {
+  background: #202833;
+}
+.topbar:has(+ .grid.cols-monitor) {
+  padding: 7px 12px;
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+.topbar:has(+ .grid.cols-monitor) .pill.ok {
+  color: var(--green);
+}
+.grid.cols-monitor {
+  width: 100%;
+  margin: 0;
+  padding: 8px 10px 12px;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) clamp(330px, 29vw, 520px);
+}
+.grid.cols-monitor .col {
+  padding-right: 0;
+  gap: 10px;
+}
+.grid.cols-monitor .preview-box.big {
+  border: 0;
+  border-radius: 0;
+  outline: 1px solid var(--line);
+}
+.grid.cols-monitor .subtab {
+  flex-wrap: wrap;
+}
+.grid.cols-monitor .obj-picker {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.grid.cols-monitor .obj-btn {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.grid.cols-monitor .row4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.grid.cols-monitor .typo-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.grid.cols-monitor .field {
+  min-width: 0;
+}
+.grid.cols-monitor .scale-row .field:not(.grow) {
+  flex: 0 1 94px;
+}
+.grid.cols-monitor .color-pick input[type="color"] {
+  min-width: 0;
+}
+.grid.cols-monitor .color-pick code {
+  min-width: 0;
+}
+@media (max-width: 840px) {
+  .grid.cols-monitor {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 420px) {
+  .topbar:has(+ .grid.cols-monitor) {
+    position: static;
+  }
+  .topbar:has(+ .grid.cols-monitor) .topbar-right {
+    flex-wrap: wrap;
+    margin-left: 0;
+  }
+  .topbar:has(+ .grid.cols-monitor) .nav a {
+    padding-inline: 8px;
+  }
+}

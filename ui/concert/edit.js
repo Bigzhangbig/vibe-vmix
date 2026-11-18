@@ -4,39 +4,18 @@
  * 先选部件（报幕/歌词/晋级/结尾/角标），再分别改它的「背景」和「文字」。
  * 背景：素材、位置、大小、等比缩放。
  * 文字：位置、大小、字体字号（字号即大小，不再叠加缩放）。
- * 「显示」只在 ?preview=1 的预监里生效，不影响 vMix 的正式上屏。
+ * 「显示」只控制本页画布，不影响 vMix 的正式上屏。
  */
 (function () {
   const $ = (s) => document.querySelector(s);
 
   const PARTS = [
-    { key: 'announce', label: '报幕', note: '背景 + 文字', bg: 'announceBg', texts: ['announceText'] },
+    { key: 'announce', label: '报幕', note: '背景 + 四个文本框', bg: 'announceBg', texts: ['announceHeader', 'announceTitle', 'announcePerformer', 'announceNote', 'announceText'] },
     { key: 'lyric', label: '歌词', note: '背景 + 文字', bg: 'lyricBg', texts: ['lyricText'] },
     { key: 'qualify', label: '晋级', note: '背景 + 标题 / 内容', bg: 'qualifyBg', texts: ['qualifyTitle', 'qualifyText'] },
     { key: 'credits', label: '结尾', note: '背景 + 文字', bg: 'creditsBg', texts: ['creditsText'] },
     { key: 'badge', label: '角标', note: '全屏飞入', bg: 'badge', texts: [] },
   ];
-
-  const DEFAULT_RECT = {
-    announceBg: { x: 0, y: 0, w: 1920, h: 1080 },
-    announceText: { x: 330, y: 650, w: 550, h: 270 },
-    lyricBg: { x: 0, y: 0, w: 1920, h: 1080 },
-    lyricText: { x: 510, y: 700, w: 900, h: 210 },
-    qualifyBg: { x: 1010, y: 250, w: 760, h: 420 },
-    qualifyTitle: { x: 1020, y: 262, w: 740, h: 72 },
-    qualifyText: { x: 1020, y: 344, w: 740, h: 300 },
-    creditsBg: { x: 0, y: 0, w: 1920, h: 1080 },
-    creditsText: { x: 560, y: 90, w: 800, h: 900 },
-    badge: { x: 0, y: 0, w: 1920, h: 1080 },
-  };
-
-  const DEFAULT_STYLE = {
-    announceText: { size: 52, weight: 700, lh: 1.2 },
-    lyricText: { size: 60, weight: 700, lh: 1.2 },
-    qualifyTitle: { size: 38, weight: 700, lh: 1.2 },
-    qualifyText: { size: 48, weight: 700, lh: 1.2 },
-    creditsText: { size: 34, weight: 700, lh: 1.9 },
-  };
 
   const FONTS = [
     'Shanggu Sans SC',
@@ -54,12 +33,12 @@
   let state = null;
   let layout = {};
   let selected = 'announce';
-  let curTextIdx = 0;
+  let curTextIdx = 1;
   let editing = false;
-  let showBg = false;
-  let showText = false;
-  let bgTimer = null;
-  let textTimer = null;
+  let previewTarget = 'announceTitle';
+  let lastPreset = null;
+  const hiddenPreview = new Set();
+  const pendingLayout = new Map();
 
   function toast(text, bad) {
     const el = $('#toast');
@@ -102,8 +81,8 @@
   }
 
   function rectOf(id) {
-    const r = layout[id] || {};
-    const d = DEFAULT_RECT[id] || { x: 0, y: 0, w: 100, h: 100 };
+    const r = layoutOf(id);
+    const d = state?.layoutDefaults?.[id] || { x: 0, y: 0, w: 100, h: 100 };
     return {
       x: r.x != null ? r.x : d.x,
       y: r.y != null ? r.y : d.y,
@@ -116,6 +95,10 @@
   function setVal(sel, v) {
     const el = $(sel);
     if (el && document.activeElement !== el) el.value = v;
+  }
+
+  function layoutOf(id) {
+    return { ...layout[id], ...pendingLayout.get(id)?.body };
   }
 
   // ---------- 渲染 ----------
@@ -155,13 +138,13 @@
     sel.innerHTML = opts.join('');
     sel.value = cur;
 
-    $('#btnPreviewBg').textContent = editing ? '重新显示' : (showBg ? '隐藏' : '显示');
+    $('#btnPreviewBg').textContent = hiddenPreview.has(p.bg) ? '显示' : '隐藏';
     $('#bgMeta').textContent = p.texts.length
       ? '背景与文字分开设置：这里只调背景，文字在下面「文字」卡里。'
       : '角标是整屏飞入动画，位置和大小一般保持铺满；缩放可整体放大缩小。';
   }
 
-  // 晋级有两个文字元素，用一排小标签切换
+  // 在同一部件的多个文本框之间切换
   function renderSubtabs() {
     const p = part();
     const box = $('#textSubtabs');
@@ -169,22 +152,17 @@
     box.hidden = p.texts.length < 2;
     if (box.hidden) return;
     box.innerHTML = '';
-    const names = { qualifyTitle: '标题', qualifyText: '内容' };
+    const names = {
+      announceHeader: '场次', announceTitle: '曲名', announcePerformer: '表演者',
+      announceNote: '补充说明', announceText: '旧版合并文字', qualifyTitle: '标题', qualifyText: '内容',
+    };
     p.texts.forEach((id, i) => {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'subtab-btn' + (i === curTextIdx ? ' active' : '');
       b.textContent = names[id] || id;
-      b.addEventListener('click', () => {
-        curTextIdx = i;
-        showText = false;
-        renderText();
-        renderSubtabs();
-        if (editing) {
-          const cur = textId();
-          if (cur) solo([cur], true, cur);
-        }
-      });
+      b.setAttribute('aria-pressed', String(i === curTextIdx));
+      b.addEventListener('click', () => chooseText(i));
       box.appendChild(b);
     });
   }
@@ -203,8 +181,8 @@
     setVal('#txW', r.w);
     setVal('#txH', r.h);
 
-    const st = layout[id] || {};
-    const d = DEFAULT_STYLE[id] || { size: 52, weight: 700, lh: 1.2 };
+    const st = layoutOf(id);
+    const d = state?.layoutDefaults?.[id] || { size: 52, weight: 700, lh: 1.2 };
     setVal('#tyFont', st.font || family());
     setVal('#tySize', st.size != null ? st.size : d.size);
     setVal('#tyWeight', String(st.weight || d.weight));
@@ -229,7 +207,7 @@
     setVal('#tyGlowOpacity', st.glowOpacity != null ? st.glowOpacity : 35);
     setVal('#tyGlowColor', toHexColor(st.glowColor, '#ffffff'));
 
-    $('#btnPreviewText').textContent = editing ? '重新显示' : (showText ? '隐藏' : '显示');
+    $('#btnPreviewText').textContent = hiddenPreview.has(id) ? '显示' : '隐藏';
   }
 
   /** <input type="color"> 只认 #rrggbb，历史数据可能带别的写法，做个兜底 */
@@ -246,68 +224,78 @@
     renderPicker();
     renderBg();
     renderText();
+    renderPlacement();
   }
 
   // ---------- 预览 ----------
 
-  async function solo(ids, on, target) {
-    try {
-      await api('/api/preview', { ids, on, target });
-    } catch (err) {
-      toast('预览失败：' + err.message, true);
-    }
+  function renderPlacement() {
+    const placement = state?.announcePlacement || 'lower-left';
+    if (state?.announcePresets?.[placement]) lastPreset = placement;
+    $('#announcePresetField').hidden = selected !== 'announce';
+    $('#announcePreset').value = placement;
   }
 
-  async function showCurrent() {
-    if (!editing) return;
+  function syncPreview() {
     const p = part();
-    const ids = [p.bg].concat(p.texts).filter(Boolean);
-    showBg = true;
-    showText = p.texts.length > 0;
-    // target 告诉预监「现在编辑的是哪一个」，让它在画面里自动选中
-    const target = p.texts.length ? textId() : p.bg;
-    await solo(ids, true, target);
-    renderBg();
+    const texts = p.key !== 'announce' ? p.texts : textId() === 'announceText'
+      ? ['announceText'] : p.texts.filter((id) => id !== 'announceText');
+    const ids = [p.bg, ...texts].filter((id) => !hiddenPreview.has(id));
+    $('#preview').contentWindow.postMessage({
+      type: 'concert-layout-preview', ids, target: previewTarget, editing,
+    }, location.origin);
+  }
+
+  function syncCanvasState() {
+    if (!state) return;
+    const { config, manifest } = state;
+    $('#preview').contentWindow.postMessage({
+      type: 'concert-layout-data', state: { layout, config, manifest },
+    }, location.origin);
+  }
+
+  function chooseText(i) {
+    curTextIdx = i;
+    previewTarget = textId();
+    hiddenPreview.delete(previewTarget);
     renderText();
+    syncPreview();
+  }
+
+  function togglePreview(id, renderCard) {
+    if (!id) return;
+    if (hiddenPreview.delete(id)) previewTarget = id;
+    else hiddenPreview.add(id);
+    renderCard();
+    syncPreview();
   }
 
   function select(key) {
     if (selected === key) return;
     selected = key;
-    curTextIdx = 0;
-    showBg = false;
-    showText = false;
+    curTextIdx = key === 'announce' ? 1 : 0;
+    previewTarget = textId() || part().bg;
     render();
-    if (editing) showCurrent();
+    syncPreview();
   }
 
   // ---------- 提交 ----------
 
-  async function submitBg() {
-    const p = part();
-    const body = {
-      id: p.bg,
+  function queueBg() {
+    queueLayout({
+      id: part().bg,
       x: Number($('#bgX').value),
       y: Number($('#bgY').value),
       w: Number($('#bgW').value),
       h: Number($('#bgH').value),
       scale: Number($('#inScaleNum').value) / 100,
-    };
-    try {
-      const res = await api('/api/layout', body);
-      if (res.layout) {
-        layout = res.layout;
-        renderBg();
-      }
-    } catch (err) {
-      toast('保存背景失败：' + err.message, true);
-    }
+    });
   }
 
-  async function submitText() {
+  function queueText() {
     const id = textId();
     if (!id) return;
-    const body = {
+    queueLayout({
       id,
       x: Number($('#txX').value),
       y: Number($('#txY').value),
@@ -329,26 +317,61 @@
       glowBlur: Number($('#tyGlowBlur').value),
       glowOpacity: Number($('#tyGlowOpacity').value),
       glowColor: $('#tyGlowColor').value,
-    };
+    });
+  }
+
+  function queueLayout(body) {
+    // 快速切换对象时仍将修改写回输入时的对象。
+    clearTimeout(pendingLayout.get(body.id)?.timer);
+    pendingLayout.set(body.id, { body, timer: setTimeout(() => savePending(body.id), 260) });
+  }
+
+  async function savePending(id) {
+    const entry = pendingLayout.get(id);
+    if (!entry) return;
+    pendingLayout.delete(id);
+    clearTimeout(entry.timer);
     try {
-      const res = await api('/api/layout', body);
-      if (res.layout) {
-        layout = res.layout;
-        renderText();
-      }
+      applySavedLayout(await api('/api/layout', entry.body));
     } catch (err) {
-      toast('保存文字失败：' + err.message, true);
+      toast('保存位置或样式失败：' + err.message, true);
     }
   }
 
-  function queueBg() {
-    clearTimeout(bgTimer);
-    bgTimer = setTimeout(submitBg, 260);
+  function applySavedLayout(result) {
+    if (result.layout) layout = result.layout;
+    if (state && result.announcePlacement) state.announcePlacement = result.announcePlacement;
+    renderBg();
+    renderText();
+    renderPlacement();
+    syncCanvasState();
   }
 
-  function queueText() {
-    clearTimeout(textTimer);
-    textTimer = setTimeout(submitText, 260);
+  function resetPreset(id) {
+    const presets = state?.announcePresets;
+    if (!presets || !Object.hasOwn(presets['lower-left'], id)) return null;
+    if (lastPreset) return presets[lastPreset][id];
+    // On reopening a custom layout, use the remaining unedited elements to
+    // identify the preset. Never reset a center box to the lower-left by guess.
+    const candidates = Object.values(presets).filter((preset) =>
+      Object.entries(preset).some(([key, rect]) => key !== id &&
+        ['x', 'y', 'w', 'h'].every((prop) => layout[key]?.[prop] === rect[prop])),
+    );
+    if (candidates.length === 1) return candidates[0][id];
+    throw new Error('请先选择「居中」或「左下角」作为复位基准');
+  }
+
+  async function resetPosition(id, geometry, background = false) {
+    if (!id) return;
+    try {
+      const d = geometry || resetPreset(id) || state?.layoutDefaults?.[id];
+      if (!d) return;
+      await savePending(id);
+      const { x, y, w, h } = d;
+      applySavedLayout(await api('/api/layout', { id, x, y, w, h, ...(background ? { scale: 1 } : {}) }));
+    } catch (err) {
+      toast('调整位置失败：' + err.message, true);
+    }
   }
 
   // ---------- 事件 ----------
@@ -376,10 +399,13 @@
         state = msg.state || msg;
         layout = state.layout || {};
         render();
+        syncCanvasState();
       } else if (msg.type === 'layout') {
-        layout = msg.layout || layout;
+        applySavedLayout(msg);
+      } else if (msg.type === 'config' && state) {
+        state.config = { ...state.config, ...msg.config };
         renderBg();
-        renderText();
+        syncCanvasState();
       }
     };
   }
@@ -387,30 +413,34 @@
   function initEdit() {
     const frame = $('#preview');
     const btn = $('#btnEdit');
-    btn.addEventListener('click', async () => {
+    function syncCanvas() {
+      syncCanvasState();
+      syncPreview();
+    }
+    btn.addEventListener('click', () => {
       editing = !editing;
-      const url = editing
-        ? '/graphics.html?preview=1&edit=1&clean=1&t=' + Date.now()
-        : '/graphics.html?preview=1&clean=1&t=' + Date.now();
-      frame.src = url;
       btn.textContent = editing ? '退出编辑' : '编辑位置';
       btn.classList.toggle('primary', editing);
+      btn.setAttribute('aria-pressed', String(editing));
       $('#hint').textContent = editing
-        ? '正在编辑：画面里只显示当前部件，拖动它或用方向键微调（Shift 10px）。'
-        : '点「编辑位置」后，画面只显示当前部件，可直接拖动。';
-      if (editing) {
-        setTimeout(showCurrent, 350);
-      } else {
-        showBg = false;
-        showText = false;
-        const p = part();
-        solo([p.bg, p.text].filter(Boolean), false);
-        render();
+        ? '拖动选中的框，或用方向键移动 1 px（按住 Shift 移动 10 px）。布局修改会保存。'
+        : '此处显示排版示例。点「编辑位置」可拖动文字框和背景。';
+      syncPreview();
+    });
+    frame.addEventListener('load', syncCanvas);
+    window.addEventListener('message', ({ source, origin, data }) => {
+      if (source !== frame.contentWindow || origin !== location.origin) return;
+      if (data?.type === 'concert-layout-ready') syncCanvas();
+      if (data?.type === 'concert-layout-select' && editing) {
+        const index = part().texts.indexOf(data.id);
+        if (index >= 0) {
+          curTextIdx = index;
+          renderText();
+        }
+        previewTarget = data.id;
       }
     });
-    frame.addEventListener('load', () => {
-      if (editing) setTimeout(showCurrent, 250);
-    });
+    syncCanvas();
   }
 
   // ---------- 启动 ----------
@@ -454,43 +484,16 @@
         state = await api('/api/state');
         layout = state.layout || {};
         render();
-        if (editing) {
-          showBg = true;
-          solo([p.bg], true, p.bg);
-        }
+        syncCanvasState();
+        hiddenPreview.delete(p.bg);
+        syncPreview();
       } catch (err) {
         toast('切换背景失败：' + err.message, true);
       }
     });
-    $('#btnPreviewBg').addEventListener('click', () => {
-      if (editing) {
-        showBg = true;
-        solo([part().bg], true, part().bg);
-        renderBg();
-        return;
-      }
-      showBg = !showBg;
-      solo([part().bg], showBg);
-      renderBg();
-    });
-    $('#btnFillBg').addEventListener('click', async () => {
-      try {
-        // 铺满 = 占满 1920×1080 且缩放回到 1:1（100%），两步一起提交
-        const res = await api('/api/layout', { id: part().bg, x: 0, y: 0, w: 1920, h: 1080, scale: 1 });
-        if (res.layout) { layout = res.layout; renderBg(); }
-      } catch (err) {
-        toast('铺满失败：' + err.message, true);
-      }
-    });
-    $('#btnResetBg').addEventListener('click', async () => {
-      const d = DEFAULT_RECT[part().bg];
-      try {
-        const res = await api('/api/layout', { id: part().bg, ...d, scale: 1 });
-        if (res.layout) { layout = res.layout; renderBg(); }
-      } catch (err) {
-        toast('复位失败：' + err.message, true);
-      }
-    });
+    $('#btnPreviewBg').addEventListener('click', () => togglePreview(part().bg, renderBg));
+    $('#btnFillBg').addEventListener('click', () => resetPosition(part().bg, { x: 0, y: 0, w: 1920, h: 1080 }, true));
+    $('#btnResetBg').addEventListener('click', () => resetPosition(part().bg, null, true));
 
     // 文字
     for (const sel of ['#txX', '#txY', '#txW', '#txH', '#tySize', '#tyLh', '#tyColor']) {
@@ -509,38 +512,17 @@
       const hex = $('#tyColorHex');
       if (hex) hex.textContent = $('#tyColor').value.toUpperCase();
     });
-    $('#btnPreviewText').addEventListener('click', () => {
-      const id = textId();
-      if (!id) return;
-      if (editing) {
-        showText = true;
-        solo([id], true, id);
-        renderText();
-        return;
-      }
-      showText = !showText;
-      solo([id], showText);
-      renderText();
-    });
-    $('#btnFillText').addEventListener('click', async () => {
-      const id = textId();
-      if (!id) return;
+    $('#btnPreviewText').addEventListener('click', () => togglePreview(textId(), renderText));
+    $('#btnFillText').addEventListener('click', () => resetPosition(textId(), { x: 0, y: 0, w: 1920, h: 1080 }));
+    $('#btnResetText').addEventListener('click', () => resetPosition(textId()));
+    $('#announcePreset').addEventListener('change', async (event) => {
+      const placement = event.target.value;
+      await Promise.all([...pendingLayout.keys()].map(savePending));
       try {
-        const res = await api('/api/layout', { id, x: 0, y: 0, w: 1920, h: 1080 });
-        if (res.layout) { layout = res.layout; renderText(); }
+        applySavedLayout(await api('/api/layout/preset', { placement }));
       } catch (err) {
-        toast('铺满失败：' + err.message, true);
-      }
-    });
-    $('#btnResetText').addEventListener('click', async () => {
-      const id = textId();
-      if (!id) return;
-      const d = DEFAULT_RECT[id];
-      try {
-        const res = await api('/api/layout', { id, ...d });
-        if (res.layout) { layout = res.layout; renderText(); }
-      } catch (err) {
-        toast('复位失败：' + err.message, true);
+        renderPlacement();
+        toast('切换报幕位置失败：' + err.message, true);
       }
     });
 
@@ -554,6 +536,7 @@
       else if (t.closest('#textCard')) lastCard = 'text';
     });
     document.addEventListener('keydown', (e) => {
+      if (!editing) return;
       const arrows = {
         ArrowLeft: [-1, 0],
         ArrowRight: [1, 0],
@@ -583,13 +566,10 @@
 
     $('#btnReload').addEventListener('click', () => location.reload());
     $('#btnResetAll').addEventListener('click', async () => {
-      if (!confirm('把所有元素的位置和大小恢复默认？字体设置不受影响。')) return;
+      if (!confirm('把所有元素的位置、大小和文字样式恢复默认？')) return;
+      await Promise.all([...pendingLayout.keys()].map(savePending));
       try {
-        const res = await api('/api/layout/reset', {});
-        if (res.layout) {
-          layout = res.layout;
-          render();
-        }
+        applySavedLayout(await api('/api/layout/reset', {}));
         toast('已恢复默认位置');
       } catch (err) {
         toast('恢复失败：' + err.message, true);

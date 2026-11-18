@@ -32,16 +32,16 @@
       <div class="card-head">
         <h2>布局画布</h2>
         <div class="btn-row tight">
-          <button id="btnEdit" class="mini">编辑位置</button>
+          <button id="btnEdit" class="mini" aria-pressed="false">编辑位置</button>
         </div>
       </div>
       <div class="preview-box big">
-        <iframe id="preview" src="/graphics.html?preview=1&clean=1" title="布局画布"></iframe>
+        <iframe id="preview" src="/graphics.html?preview=1&layout=1&clean=1" title="布局画布"></iframe>
       </div>
       <div class="hint" id="hint">
-        点「编辑位置」后，画面里只显示当前部件，可以直接拖动；方向键微调 1px，Shift + 方向键 10px。
+        此处显示排版示例。点「编辑位置」可拖动文字框和背景。
       </div>
-      <p class="hint">拖动背景要不要带上文字，在配置页的「拖动编组」里开关。</p>
+      <p class="hint">拖动背景会带动同组文字。排版示例不会送到 vMix。</p>
     </div>
   </section>
 
@@ -52,6 +52,14 @@
       </div>
       <p class="hint">先选部件，下面会出现这个部件的背景和文字两块设置，各改各的。</p>
       <div id="objPicker" class="obj-picker"></div>
+      <label class="field" id="announcePresetField">
+        <span>报幕位置（切换后保存）</span>
+        <select id="announcePreset">
+          <option value="lower-left">左下角</option>
+          <option value="center">居中</option>
+          <option value="custom" disabled>自定义</option>
+        </select>
+      </label>
     </div>
 
     <div class="card" id="bgCard">

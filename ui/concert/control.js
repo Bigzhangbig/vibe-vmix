@@ -3,6 +3,7 @@
   const $ = (selector) => document.querySelector(selector);
   const CHANNELS = ['announce', 'lyric', 'qualify', 'credits', 'badge', 'visual'];
   const LABELS = { announce: '报幕', lyric: '歌词', qualify: '结果', credits: '结尾', badge: '角标' };
+  const ANNOUNCE_FIELDS = { header: '#announceHeader', title: '#announceTitle', performer: '#announcePerformer', note: '#announceNote' };
   let state = null;
   let preparedSongId = null;
   let connected = false;
@@ -43,9 +44,16 @@
 
   function fillAnnounce() {
     const song = preparedSong();
-    const lines = song ? ['《' + song.title + '》'] : [];
-    if (song?.performer) lines.push('演唱：' + song.performer);
-    $('#announceText').value = lines.join('\n');
+    const fields = {
+      header: song ? [song.round, song.order > 0 ? '第 ' + song.order + ' 个节目' : ''].filter(Boolean).join(' · ') : '',
+      title: song ? '《' + song.title + '》' : '',
+      performer: song?.performer ? '演唱：' + song.performer : '',
+      note: '',
+    };
+    for (const [key, selector] of Object.entries(ANNOUNCE_FIELDS)) {
+      const input = $(selector);
+      input.value = fields[key].slice(0, input.maxLength);
+    }
   }
 
   function setBusy() {
@@ -202,7 +210,8 @@
     $('#btnFillAnnounce').addEventListener('click', fillAnnounce);
     $('#btn-announce').addEventListener('click', () => operate(() => {
       if (!preparedSong()) throw new Error('请先选择待播节目');
-      return command('announce', 'on', { songId: preparedSongId, text: $('#announceText').value });
+      const fields = Object.fromEntries(Object.entries(ANNOUNCE_FIELDS).map(([key, selector]) => [key, $(selector).value]));
+      return command('announce', 'on', { songId: preparedSongId, fields });
     }));
     $('#btn-lyric').addEventListener('click', () => operate(() => {
       if (!preparedSong()) throw new Error('请先选择待播节目');
